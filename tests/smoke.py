@@ -480,6 +480,17 @@ async def run() -> int:
             results.append(("get_mcp_oauth_user_credential_status", True, "skipped (no servers)"))
         results.append(await _step("get_mcp_client_ip", client.get_mcp_client_ip()))
 
+        # MCP toolsets (read-only — empty on TETRA, create-flow stays in unit tests)
+        toolsets = await client.list_mcp_toolsets()
+        results.append(("list_mcp_toolsets", True, _summarize(toolsets)))
+        first_toolset_id = None
+        if isinstance(toolsets, list) and toolsets and isinstance(toolsets[0], dict):
+            first_toolset_id = toolsets[0].get("toolset_id")
+        if first_toolset_id:
+            results.append(await _step("get_mcp_toolset", client.get_mcp_toolset(first_toolset_id)))
+        else:
+            results.append(("get_mcp_toolset", True, "skipped (no toolsets)"))
+
         # End-to-end: call Context7's resolve-library-id through the gateway.
         # Master keys aren't auto-granted MCP tool access; some proxies return
         # 403 "User not allowed" — that's an upstream auth quirk, not a wrapper
