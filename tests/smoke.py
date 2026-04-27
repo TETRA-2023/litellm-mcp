@@ -171,6 +171,121 @@ async def run() -> int:
             results.append(("get_key_info", True, "skipped (no virtual keys to probe)"))
         results.append(await _step("key_health", client.key_health()))
 
+        # Users family (2 read ops)
+        users_payload = await client.list_users(page_size=5)
+        results.append(("list_users", True, _summarize(users_payload)))
+        first_user_id = None
+        if isinstance(users_payload, dict):
+            for u in users_payload.get("users") or []:
+                if isinstance(u, dict) and u.get("user_id"):
+                    first_user_id = u["user_id"]
+                    break
+        elif isinstance(users_payload, list) and users_payload:
+            first_user_id = (
+                users_payload[0].get("user_id") if isinstance(users_payload[0], dict) else None
+            )
+        if first_user_id:
+            results.append(await _step("get_user_info", client.get_user_info(first_user_id)))
+        else:
+            results.append(("get_user_info", True, "skipped (no users)"))
+
+        # Customers family (2 read ops + daily activity)
+        customers = await client.list_customers()
+        results.append(("list_customers", True, _summarize(customers)))
+        first_customer = None
+        if isinstance(customers, list) and customers:
+            first_customer = (
+                customers[0] if isinstance(customers[0], str) else customers[0].get("user_id")
+            )
+        elif isinstance(customers, dict):
+            data = customers.get("data") or customers.get("customers") or []
+            if data:
+                first_customer = data[0] if isinstance(data[0], str) else data[0].get("user_id")
+        if first_customer:
+            try:
+                payload = await client.get_customer_info(first_customer)
+                results.append(("get_customer_info", True, _summarize(payload)))
+            except LiteLLMAPIError as e:
+                # Customer rows can be soft-deleted but still appear in list — 404 acceptable.
+                if e.status_code == 404:
+                    results.append(("get_customer_info", True, "404 (stale list entry)"))
+                else:
+                    results.append(("get_customer_info", False, f"APIError {e.status_code}: {e}"))
+        else:
+            results.append(("get_customer_info", True, "skipped (no customers)"))
+        # Daily-activity endpoints require start/end dates despite the
+        # OpenAPI marking them optional — upstream returns 400 if either is
+        # missing. Use a 30-day rolling window.
+        from datetime import date, timedelta
+
+        end_d = date.today().isoformat()
+        start_d = (date.today() - timedelta(days=30)).isoformat()
+        results.append(
+            await _step(
+                "get_customer_daily_activity",
+                client.get_customer_daily_activity(start_date=start_d, end_date=end_d, page=1),
+            )
+        )
+
+        # Organizations family (3 read ops)
+        orgs = await client.list_organizations()
+        results.append(("list_organizations", True, _summarize(orgs)))
+        first_org_id = None
+        if isinstance(orgs, list) and orgs:
+            first_org_id = orgs[0].get("organization_id") if isinstance(orgs[0], dict) else None
+        elif isinstance(orgs, dict):
+            data = orgs.get("data") or orgs.get("organizations") or []
+            if data:
+                first_org_id = data[0].get("organization_id") if isinstance(data[0], dict) else None
+        if first_org_id:
+            results.append(
+                await _step("get_organization_info", client.get_organization_info(first_org_id))
+            )
+        else:
+            results.append(("get_organization_info", True, "skipped (no orgs)"))
+        results.append(
+            await _step(
+                "get_org_daily_activity",
+                client.get_org_daily_activity(start_date=start_d, end_date=end_d, page=1),
+            )
+        )
+
+        # Projects family (2 read ops)
+        projects = await client.list_projects()
+        results.append(("list_projects", True, _summarize(projects)))
+        first_project_id = None
+        if isinstance(projects, list) and projects:
+            first_project_id = (
+                projects[0].get("project_id") if isinstance(projects[0], dict) else None
+            )
+        elif isinstance(projects, dict):
+            data = projects.get("data") or projects.get("projects") or []
+            if data:
+                first_project_id = data[0].get("project_id") if isinstance(data[0], dict) else None
+        if first_project_id:
+            results.append(
+                await _step("get_project_info", client.get_project_info(first_project_id))
+            )
+        else:
+            results.append(("get_project_info", True, "skipped (no projects)"))
+
+        # Unified Access Groups family (2 read ops)
+        uag = await client.list_user_access_groups()
+        results.append(("list_user_access_groups", True, _summarize(uag)))
+        first_uag_id = None
+        if isinstance(uag, list) and uag:
+            first_uag_id = uag[0].get("access_group_id") if isinstance(uag[0], dict) else None
+        elif isinstance(uag, dict):
+            data = uag.get("data") or uag.get("access_groups") or []
+            if data:
+                first_uag_id = data[0].get("access_group_id") if isinstance(data[0], dict) else None
+        if first_uag_id:
+            results.append(
+                await _step("get_user_access_group", client.get_user_access_group(first_uag_id))
+            )
+        else:
+            results.append(("get_user_access_group", True, "skipped (no user access groups)"))
+
     finally:
         await client.close()
 

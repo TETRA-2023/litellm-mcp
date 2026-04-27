@@ -528,6 +528,391 @@ class TestKeyHealth:
         mock_client.key_health.assert_awaited_once_with()
 
 
+class TestListUsers:
+    @pytest.mark.asyncio
+    async def test_no_filters(self, mock_client):
+        mock_client.list_users.return_value = {"users": [], "total_count": 0}
+        result = await src.server.list_users()
+        assert result == {"users": [], "total_count": 0}
+        mock_client.list_users.assert_awaited_once_with(
+            None, None, None, None, None, None, None, None, None, None
+        )
+
+    @pytest.mark.asyncio
+    async def test_filters_users_by_verbosity(self, mock_client):
+        mock_client.list_users.return_value = {
+            "users": [
+                {
+                    "user_id": "u-1",
+                    "user_email": "a@x.com",
+                    "user_role": "internal_user",
+                    "spend": 0.0,
+                    "extra": True,
+                }
+            ]
+        }
+        result = await src.server.list_users(verbosity="minimal")
+        assert result["users"] == [{"user_id": "u-1", "user_email": "a@x.com"}]
+
+    @pytest.mark.asyncio
+    async def test_filters_list_payload(self, mock_client):
+        mock_client.list_users.return_value = [
+            {"user_id": "u-1", "user_email": "a@x.com", "extra": True}
+        ]
+        result = await src.server.list_users(verbosity="minimal")
+        assert result == [{"user_id": "u-1", "user_email": "a@x.com"}]
+
+
+class TestGetUserInfo:
+    @pytest.mark.asyncio
+    async def test_no_user_id(self, mock_client):
+        mock_client.get_user_info.return_value = {"user_id": "u-self", "user_email": "me@x.com"}
+        await src.server.get_user_info()
+        mock_client.get_user_info.assert_awaited_once_with(None)
+
+    @pytest.mark.asyncio
+    async def test_with_user_id(self, mock_client):
+        mock_client.get_user_info.return_value = {
+            "user_id": "u-1",
+            "user_email": "a@x.com",
+            "user_role": "internal_user",
+        }
+        result = await src.server.get_user_info("u-1", "minimal")
+        assert result == {"user_id": "u-1", "user_email": "a@x.com"}
+        mock_client.get_user_info.assert_awaited_once_with("u-1")
+
+
+class TestCreateUser:
+    @pytest.mark.asyncio
+    async def test_minimal(self, mock_client):
+        mock_client.create_user.return_value = {"user_id": "u-1"}
+        await src.server.create_user(user_email="a@x.com")
+        call = mock_client.create_user.await_args
+        assert call.args[0] == "a@x.com"
+
+    @pytest.mark.asyncio
+    async def test_extras_passthrough(self, mock_client):
+        mock_client.create_user.return_value = {"user_id": "u-1"}
+        await src.server.create_user(
+            user_email="a@x.com", extras={"permissions": {"can_create_keys": True}}
+        )
+        call = mock_client.create_user.await_args
+        assert call.args[16] == {"permissions": {"can_create_keys": True}}
+
+
+class TestUpdateUser:
+    @pytest.mark.asyncio
+    async def test_required_user_id(self, mock_client):
+        mock_client.update_user.return_value = {"user_id": "u-1"}
+        await src.server.update_user("u-1", max_budget=50.0)
+        mock_client.update_user.assert_awaited_once_with(
+            "u-1", None, None, None, None, None, 50.0, None, None, None, None, None, None, None
+        )
+
+
+class TestDeleteUser:
+    @pytest.mark.asyncio
+    async def test_passes_ids(self, mock_client):
+        mock_client.delete_user.return_value = {"deleted": 2}
+        await src.server.delete_user(["u-1", "u-2"])
+        mock_client.delete_user.assert_awaited_once_with(["u-1", "u-2"])
+
+
+class TestListCustomers:
+    @pytest.mark.asyncio
+    async def test_passthrough_full(self, mock_client):
+        payload = [{"user_id": "c-1", "alias": "Acme", "extra": True}]
+        mock_client.list_customers.return_value = payload
+        assert await src.server.list_customers("full") == payload
+
+    @pytest.mark.asyncio
+    async def test_minimal_filters(self, mock_client):
+        mock_client.list_customers.return_value = [
+            {"user_id": "c-1", "alias": "Acme", "max_budget": 100.0}
+        ]
+        result = await src.server.list_customers("minimal")
+        assert result == [{"user_id": "c-1", "alias": "Acme"}]
+
+
+class TestGetCustomerInfo:
+    @pytest.mark.asyncio
+    async def test_passes_end_user_id(self, mock_client):
+        mock_client.get_customer_info.return_value = {"user_id": "c-1", "alias": "Acme"}
+        await src.server.get_customer_info("c-1", "full")
+        mock_client.get_customer_info.assert_awaited_once_with("c-1")
+
+
+class TestCreateCustomer:
+    @pytest.mark.asyncio
+    async def test_required_user_id(self, mock_client):
+        mock_client.create_customer.return_value = {"user_id": "c-1"}
+        await src.server.create_customer("c-1", alias="Acme", max_budget=100.0)
+        call = mock_client.create_customer.await_args
+        assert call.args[0] == "c-1"
+        assert call.args[1] == "Acme"
+        assert call.args[2] == 100.0
+
+
+class TestUpdateCustomer:
+    @pytest.mark.asyncio
+    async def test_minimal(self, mock_client):
+        mock_client.update_customer.return_value = {"user_id": "c-1"}
+        await src.server.update_customer("c-1", max_budget=200.0)
+        mock_client.update_customer.assert_awaited_once_with(
+            "c-1", None, 200.0, None, None, None, None, None
+        )
+
+
+class TestDeleteCustomer:
+    @pytest.mark.asyncio
+    async def test_passes_ids(self, mock_client):
+        mock_client.delete_customer.return_value = {"deleted": 1}
+        await src.server.delete_customer(["c-1"])
+        mock_client.delete_customer.assert_awaited_once_with(["c-1"])
+
+
+class TestSetCustomerBlocked:
+    @pytest.mark.asyncio
+    async def test_block(self, mock_client):
+        mock_client.set_customer_blocked.return_value = {"ok": True}
+        await src.server.set_customer_blocked(["c-1"], True)
+        mock_client.set_customer_blocked.assert_awaited_once_with(["c-1"], True)
+
+    @pytest.mark.asyncio
+    async def test_unblock(self, mock_client):
+        mock_client.set_customer_blocked.return_value = {"ok": True}
+        await src.server.set_customer_blocked(["c-1", "c-2"], False)
+        mock_client.set_customer_blocked.assert_awaited_once_with(["c-1", "c-2"], False)
+
+
+class TestGetCustomerDailyActivity:
+    @pytest.mark.asyncio
+    async def test_passes_dates(self, mock_client):
+        mock_client.get_customer_daily_activity.return_value = {"data": []}
+        await src.server.get_customer_daily_activity(
+            start_date="2026-04-01", end_date="2026-04-30", page=1
+        )
+        mock_client.get_customer_daily_activity.assert_awaited_once_with(
+            None, "2026-04-01", "2026-04-30", None, None, 1, None, None
+        )
+
+
+class TestListOrganizations:
+    @pytest.mark.asyncio
+    async def test_no_filters(self, mock_client):
+        mock_client.list_organizations.return_value = [{"organization_id": "o-1"}]
+        await src.server.list_organizations()
+        mock_client.list_organizations.assert_awaited_once_with(None, None)
+
+    @pytest.mark.asyncio
+    async def test_filter_by_alias(self, mock_client):
+        mock_client.list_organizations.return_value = []
+        await src.server.list_organizations(org_alias="acme")
+        mock_client.list_organizations.assert_awaited_once_with(None, "acme")
+
+
+class TestGetOrganizationInfo:
+    @pytest.mark.asyncio
+    async def test_passes_id(self, mock_client):
+        mock_client.get_organization_info.return_value = {
+            "organization_id": "o-1",
+            "organization_alias": "Acme",
+        }
+        result = await src.server.get_organization_info("o-1", "minimal")
+        assert result == {"organization_id": "o-1", "organization_alias": "Acme"}
+
+
+class TestCreateOrganization:
+    @pytest.mark.asyncio
+    async def test_required_alias(self, mock_client):
+        mock_client.create_organization.return_value = {"organization_id": "o-1"}
+        await src.server.create_organization("Acme", max_budget=1000.0)
+        call = mock_client.create_organization.await_args
+        assert call.args[0] == "Acme"
+        assert call.args[3] == 1000.0
+
+
+class TestUpdateOrganization:
+    @pytest.mark.asyncio
+    async def test_required_id(self, mock_client):
+        mock_client.update_organization.return_value = {"ok": True}
+        await src.server.update_organization("o-1", max_budget=2000.0)
+        mock_client.update_organization.assert_awaited_once_with(
+            "o-1", None, None, 2000.0, None, None, None, None, None
+        )
+
+    @pytest.mark.asyncio
+    async def test_extras_merged(self, mock_client):
+        mock_client.update_organization.return_value = {"ok": True}
+        await src.server.update_organization("o-1", extras={"object_permission": {}})
+        call = mock_client.update_organization.await_args
+        assert call.args[8] == {"object_permission": {}}
+
+
+class TestDeleteOrganization:
+    @pytest.mark.asyncio
+    async def test_passes_ids(self, mock_client):
+        mock_client.delete_organization.return_value = {"deleted": 1}
+        await src.server.delete_organization(["o-1"])
+        mock_client.delete_organization.assert_awaited_once_with(["o-1"])
+
+
+class TestAddOrgMember:
+    @pytest.mark.asyncio
+    async def test_minimal(self, mock_client):
+        mock_client.add_org_member.return_value = {"ok": True}
+        await src.server.add_org_member("o-1", {"user_id": "u-1", "role": "internal_user"})
+        mock_client.add_org_member.assert_awaited_once_with(
+            "o-1", {"user_id": "u-1", "role": "internal_user"}, None
+        )
+
+    @pytest.mark.asyncio
+    async def test_with_budget(self, mock_client):
+        mock_client.add_org_member.return_value = {"ok": True}
+        await src.server.add_org_member("o-1", {"user_email": "a@x.com", "role": "org_admin"}, 50.0)
+        mock_client.add_org_member.assert_awaited_once_with(
+            "o-1", {"user_email": "a@x.com", "role": "org_admin"}, 50.0
+        )
+
+
+class TestUpdateOrgMember:
+    @pytest.mark.asyncio
+    async def test_role_change(self, mock_client):
+        mock_client.update_org_member.return_value = {"ok": True}
+        await src.server.update_org_member("o-1", user_id="u-1", role="org_admin")
+        mock_client.update_org_member.assert_awaited_once_with(
+            "o-1", "u-1", None, "org_admin", None
+        )
+
+
+class TestDeleteOrgMember:
+    @pytest.mark.asyncio
+    async def test_by_email(self, mock_client):
+        mock_client.delete_org_member.return_value = {"ok": True}
+        await src.server.delete_org_member("o-1", user_email="a@x.com")
+        mock_client.delete_org_member.assert_awaited_once_with("o-1", None, "a@x.com")
+
+
+class TestGetOrgDailyActivity:
+    @pytest.mark.asyncio
+    async def test_passes_filters(self, mock_client):
+        mock_client.get_org_daily_activity.return_value = {"data": []}
+        await src.server.get_org_daily_activity(organization_ids="o-1,o-2", start_date="2026-04-01")
+        mock_client.get_org_daily_activity.assert_awaited_once_with(
+            "o-1,o-2", "2026-04-01", None, None, None, None, None, None
+        )
+
+
+class TestListProjects:
+    @pytest.mark.asyncio
+    async def test_passthrough(self, mock_client):
+        mock_client.list_projects.return_value = [{"project_id": "p-1"}]
+        result = await src.server.list_projects("full")
+        assert result == [{"project_id": "p-1"}]
+
+
+class TestGetProjectInfo:
+    @pytest.mark.asyncio
+    async def test_passes_id(self, mock_client):
+        mock_client.get_project_info.return_value = {
+            "project_id": "p-1",
+            "project_alias": "Phoenix",
+        }
+        result = await src.server.get_project_info("p-1", "minimal")
+        assert result == {"project_id": "p-1", "project_alias": "Phoenix"}
+
+
+class TestCreateProject:
+    @pytest.mark.asyncio
+    async def test_required_team_id(self, mock_client):
+        mock_client.create_project.return_value = {"project_id": "p-1"}
+        await src.server.create_project("t-1", project_alias="Phoenix", max_budget=500.0)
+        call = mock_client.create_project.await_args
+        assert call.args[0] == "t-1"
+        assert call.args[2] == "Phoenix"
+        assert call.args[5] == 500.0
+
+
+class TestUpdateProject:
+    @pytest.mark.asyncio
+    async def test_required_id(self, mock_client):
+        mock_client.update_project.return_value = {"ok": True}
+        await src.server.update_project("p-1", max_budget=1000.0)
+        mock_client.update_project.assert_awaited_once_with(
+            "p-1", None, None, None, 1000.0, None, None, None, None, None, None, None, None
+        )
+
+
+class TestDeleteProject:
+    @pytest.mark.asyncio
+    async def test_passes_ids(self, mock_client):
+        mock_client.delete_project.return_value = {"deleted": 1}
+        await src.server.delete_project(["p-1", "p-2"])
+        mock_client.delete_project.assert_awaited_once_with(["p-1", "p-2"])
+
+
+class TestListUserAccessGroups:
+    @pytest.mark.asyncio
+    async def test_passthrough(self, mock_client):
+        mock_client.list_user_access_groups.return_value = [
+            {"access_group_id": "ag-1", "access_group_name": "engineering"}
+        ]
+        result = await src.server.list_user_access_groups("full")
+        assert result == [{"access_group_id": "ag-1", "access_group_name": "engineering"}]
+
+
+class TestGetUserAccessGroup:
+    @pytest.mark.asyncio
+    async def test_passes_id(self, mock_client):
+        mock_client.get_user_access_group.return_value = {
+            "access_group_id": "ag-1",
+            "access_group_name": "engineering",
+        }
+        result = await src.server.get_user_access_group("ag-1", "minimal")
+        assert result == {"access_group_id": "ag-1", "access_group_name": "engineering"}
+
+
+class TestCreateUserAccessGroup:
+    @pytest.mark.asyncio
+    async def test_minimal(self, mock_client):
+        mock_client.create_user_access_group.return_value = {"access_group_id": "ag-1"}
+        await src.server.create_user_access_group("engineering")
+        mock_client.create_user_access_group.assert_awaited_once_with(
+            "engineering", None, None, None, None, None, None
+        )
+
+    @pytest.mark.asyncio
+    async def test_with_members(self, mock_client):
+        mock_client.create_user_access_group.return_value = {"access_group_id": "ag-1"}
+        await src.server.create_user_access_group(
+            "engineering",
+            description="eng team",
+            access_model_names=["gpt-4o"],
+            assigned_team_ids=["t-1"],
+        )
+        mock_client.create_user_access_group.assert_awaited_once_with(
+            "engineering", "eng team", ["gpt-4o"], None, None, ["t-1"], None
+        )
+
+
+class TestUpdateUserAccessGroup:
+    @pytest.mark.asyncio
+    async def test_replace_models(self, mock_client):
+        mock_client.update_user_access_group.return_value = {"ok": True}
+        await src.server.update_user_access_group("ag-1", access_model_names=["claude-opus-4-7"])
+        mock_client.update_user_access_group.assert_awaited_once_with(
+            "ag-1", None, None, ["claude-opus-4-7"], None, None, None, None
+        )
+
+
+class TestDeleteUserAccessGroup:
+    @pytest.mark.asyncio
+    async def test_passes_id(self, mock_client):
+        mock_client.delete_user_access_group.return_value = {"deleted": True}
+        await src.server.delete_user_access_group("ag-1")
+        mock_client.delete_user_access_group.assert_awaited_once_with("ag-1")
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

@@ -4,9 +4,11 @@ MCP server for [LiteLLM](https://github.com/BerriAI/litellm) proxy administratio
 
 **Upstream API reference:** [LiteLLM proxy Swagger](https://litellm-api.up.railway.app/).
 
-Foundation (US #534) shipped `list_models`. Admin slice (US #535) adds 32 tools
+Foundation (US #534) shipped `list_models`. Admin slice (US #535) added 32 tools
 covering models, model hub, model access groups, credentials, and virtual keys.
-Subsequent slices add identity/teams/spend/execution (#536), governance and
+Identity slice (US #536) adds 31 tools covering internal users, customers,
+organizations (with member management), projects, and unified user access
+groups. Subsequent slices add spend/execution (#536b), governance and
 passthrough (#538), and the MCP-of-MCPs gateway (#558).
 
 ## Setup
@@ -133,6 +135,69 @@ All tools accept a `verbosity` arg (`minimal` / `standard` / `full`) where it ma
 `generate_key`, `generate_service_account_key`, `update_key`, and `regenerate_key`
 expose the most common ~12 fields as named args; pass any other upstream field
 via the `extras: dict` argument (merged into the request body).
+
+### Internal Users (5)
+
+| Tool | Endpoint |
+|------|----------|
+| `list_users` | `GET /user/list` |
+| `get_user_info` | `GET /user/info` |
+| `create_user` | `POST /user/new` |
+| `update_user` | `POST /user/update` |
+| `delete_user` | `POST /user/delete` |
+
+### Customers (7)
+
+| Tool | Endpoint |
+|------|----------|
+| `list_customers` | `GET /customer/list` |
+| `get_customer_info` | `GET /customer/info` |
+| `create_customer` | `POST /customer/new` |
+| `update_customer` | `POST /customer/update` |
+| `delete_customer` | `POST /customer/delete` |
+| `set_customer_blocked(blocked: bool)` | `POST /customer/block` ∣ `POST /customer/unblock` |
+| `get_customer_daily_activity` | `GET /customer/daily/activity` |
+
+### Organizations (9)
+
+| Tool | Endpoint |
+|------|----------|
+| `list_organizations` | `GET /organization/list` |
+| `get_organization_info` | `GET /organization/info` |
+| `create_organization` | `POST /organization/new` |
+| `update_organization` | `PATCH /organization/update` |
+| `delete_organization` | `DELETE /organization/delete` |
+| `add_org_member` | `POST /organization/member_add` |
+| `update_org_member` | `PATCH /organization/member_update` |
+| `delete_org_member` | `DELETE /organization/member_delete` |
+| `get_org_daily_activity` | `GET /organization/daily/activity` |
+
+### Projects (5)
+
+| Tool | Endpoint |
+|------|----------|
+| `list_projects` | `GET /project/list` |
+| `get_project_info` | `GET /project/info` |
+| `create_project` | `POST /project/new` |
+| `update_project` | `POST /project/update` |
+| `delete_project` | `DELETE /project/delete` |
+
+### Unified User Access Groups (5)
+
+| Tool | Endpoint |
+|------|----------|
+| `list_user_access_groups` | `GET /v1/unified_access_group` |
+| `get_user_access_group` | `GET /v1/unified_access_group/{id}` |
+| `create_user_access_group` | `POST /v1/unified_access_group` |
+| `update_user_access_group` | `PUT /v1/unified_access_group/{id}` |
+| `delete_user_access_group` | `DELETE /v1/unified_access_group/{id}` |
+
+Distinct from the model-access-groups family above — unified user access
+groups gate users/teams against models, MCP servers, and agents in one shape.
+`create_user`, `update_user`, `create_customer`, `update_customer`,
+`create_organization`, `update_organization`, `create_project`, and
+`update_project` accept an `extras: dict` argument for the long tail of
+upstream fields not surfaced as named args.
 
 ## Development
 

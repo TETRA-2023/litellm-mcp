@@ -594,3 +594,654 @@ class LiteLLMClient:
         Returns connectivity / permission status for the bearer key. No body.
         """
         return await self._request("POST", "/key/health")
+
+    # ── Internal User operations ──
+
+    @staticmethod
+    def _build_body(common: dict[str, Any], extras: Optional[dict] = None) -> dict[str, Any]:
+        """Build a request body: drop None entries from common, merge extras."""
+        body = {k: v for k, v in common.items() if v is not None}
+        if extras:
+            body.update(extras)
+        return body
+
+    async def list_users(
+        self,
+        role: Optional[str] = None,
+        user_ids: Optional[str] = None,
+        sso_user_ids: Optional[str] = None,
+        user_email: Optional[str] = None,
+        team: Optional[str] = None,
+        page: Optional[int] = None,
+        page_size: Optional[int] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+        organization_ids: Optional[str] = None,
+    ) -> dict:
+        """List internal LiteLLM users (`GET /user/list`).
+
+        All filters are optional. `user_ids`, `sso_user_ids`, `organization_ids`
+        are upstream-comma-separated strings (not arrays).
+        """
+        params = {
+            k: v
+            for k, v in {
+                "role": role,
+                "user_ids": user_ids,
+                "sso_user_ids": sso_user_ids,
+                "user_email": user_email,
+                "team": team,
+                "page": page,
+                "page_size": page_size,
+                "sort_by": sort_by,
+                "sort_order": sort_order,
+                "organization_ids": organization_ids,
+            }.items()
+            if v is not None
+        }
+        return await self._request("GET", "/user/list", params=params or None)
+
+    async def get_user_info(self, user_id: Optional[str] = None) -> dict:
+        """Get info about an internal user (`GET /user/info`).
+
+        If `user_id` is omitted, the upstream returns info about the caller.
+        """
+        params = {"user_id": user_id} if user_id else None
+        return await self._request("GET", "/user/info", params=params)
+
+    async def create_user(
+        self,
+        user_email: Optional[str] = None,
+        user_id: Optional[str] = None,
+        user_alias: Optional[str] = None,
+        user_role: Optional[str] = None,
+        teams: Optional[list[str]] = None,
+        organizations: Optional[list[str]] = None,
+        models: Optional[list[str]] = None,
+        max_budget: Optional[float] = None,
+        budget_duration: Optional[str] = None,
+        tpm_limit: Optional[int] = None,
+        rpm_limit: Optional[int] = None,
+        metadata: Optional[dict] = None,
+        guardrails: Optional[list[str]] = None,
+        blocked: Optional[bool] = None,
+        auto_create_key: Optional[bool] = None,
+        send_invite_email: Optional[bool] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Create an internal user (`POST /user/new`).
+
+        ~12 common NewUserRequest fields are surfaced as named args; pass any
+        other upstream field via `extras` (merged last into the body). All args
+        are optional — upstream defaults apply.
+        """
+        body = self._build_body(
+            {
+                "user_email": user_email,
+                "user_id": user_id,
+                "user_alias": user_alias,
+                "user_role": user_role,
+                "teams": teams,
+                "organizations": organizations,
+                "models": models,
+                "max_budget": max_budget,
+                "budget_duration": budget_duration,
+                "tpm_limit": tpm_limit,
+                "rpm_limit": rpm_limit,
+                "metadata": metadata,
+                "guardrails": guardrails,
+                "blocked": blocked,
+                "auto_create_key": auto_create_key,
+                "send_invite_email": send_invite_email,
+            },
+            extras,
+        )
+        return await self._request("POST", "/user/new", json=body)
+
+    async def update_user(
+        self,
+        user_id: str,
+        user_email: Optional[str] = None,
+        user_alias: Optional[str] = None,
+        user_role: Optional[str] = None,
+        password: Optional[str] = None,
+        models: Optional[list[str]] = None,
+        max_budget: Optional[float] = None,
+        budget_duration: Optional[str] = None,
+        tpm_limit: Optional[int] = None,
+        rpm_limit: Optional[int] = None,
+        metadata: Optional[dict] = None,
+        guardrails: Optional[list[str]] = None,
+        blocked: Optional[bool] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Update an internal user (`POST /user/update`).
+
+        Only `user_id` is required; other args are merged sparsely. Use
+        `extras` for less-common UpdateUserRequest fields.
+        """
+        body = self._build_body(
+            {
+                "user_id": user_id,
+                "user_email": user_email,
+                "user_alias": user_alias,
+                "user_role": user_role,
+                "password": password,
+                "models": models,
+                "max_budget": max_budget,
+                "budget_duration": budget_duration,
+                "tpm_limit": tpm_limit,
+                "rpm_limit": rpm_limit,
+                "metadata": metadata,
+                "guardrails": guardrails,
+                "blocked": blocked,
+            },
+            extras,
+        )
+        return await self._request("POST", "/user/update", json=body)
+
+    async def delete_user(self, user_ids: list[str]) -> dict:
+        """Batch-delete internal users (`POST /user/delete`).
+
+        Body is `{"user_ids": [...]}`. At least one id is required.
+        """
+        return await self._request("POST", "/user/delete", json={"user_ids": user_ids})
+
+    # ── Customer (end-user) operations ──
+
+    async def list_customers(self) -> Any:
+        """List end-user customers (`GET /customer/list`)."""
+        return await self._request("GET", "/customer/list")
+
+    async def get_customer_info(self, end_user_id: str) -> dict:
+        """Get a customer by end_user_id (`GET /customer/info`)."""
+        return await self._request("GET", "/customer/info", params={"end_user_id": end_user_id})
+
+    async def create_customer(
+        self,
+        user_id: str,
+        alias: Optional[str] = None,
+        max_budget: Optional[float] = None,
+        soft_budget: Optional[float] = None,
+        budget_id: Optional[str] = None,
+        budget_duration: Optional[str] = None,
+        tpm_limit: Optional[int] = None,
+        rpm_limit: Optional[int] = None,
+        max_parallel_requests: Optional[int] = None,
+        blocked: Optional[bool] = None,
+        allowed_model_region: Optional[str] = None,
+        default_model: Optional[str] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Create a customer (`POST /customer/new`).
+
+        `user_id` is required (the customer's stable end-user id). Other fields
+        are optional; pass uncommon NewCustomerRequest fields via `extras`.
+        """
+        body = self._build_body(
+            {
+                "user_id": user_id,
+                "alias": alias,
+                "max_budget": max_budget,
+                "soft_budget": soft_budget,
+                "budget_id": budget_id,
+                "budget_duration": budget_duration,
+                "tpm_limit": tpm_limit,
+                "rpm_limit": rpm_limit,
+                "max_parallel_requests": max_parallel_requests,
+                "blocked": blocked,
+                "allowed_model_region": allowed_model_region,
+                "default_model": default_model,
+            },
+            extras,
+        )
+        return await self._request("POST", "/customer/new", json=body)
+
+    async def update_customer(
+        self,
+        user_id: str,
+        alias: Optional[str] = None,
+        max_budget: Optional[float] = None,
+        budget_id: Optional[str] = None,
+        blocked: Optional[bool] = None,
+        allowed_model_region: Optional[str] = None,
+        default_model: Optional[str] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Update a customer (`POST /customer/update`).
+
+        `user_id` is required. UpdateCustomerRequest is intentionally narrower
+        than NewCustomerRequest upstream — pass less-common fields via `extras`.
+        """
+        body = self._build_body(
+            {
+                "user_id": user_id,
+                "alias": alias,
+                "max_budget": max_budget,
+                "budget_id": budget_id,
+                "blocked": blocked,
+                "allowed_model_region": allowed_model_region,
+                "default_model": default_model,
+            },
+            extras,
+        )
+        return await self._request("POST", "/customer/update", json=body)
+
+    async def delete_customer(self, user_ids: list[str]) -> dict:
+        """Batch-delete customers (`POST /customer/delete`).
+
+        Body is `{"user_ids": [...]}`.
+        """
+        return await self._request("POST", "/customer/delete", json={"user_ids": user_ids})
+
+    async def set_customer_blocked(self, user_ids: list[str], blocked: bool) -> dict:
+        """Block or unblock customers.
+
+        Routes to `POST /customer/block` when `blocked=True`, else
+        `POST /customer/unblock`. Body in both cases is `{"user_ids": [...]}`.
+        """
+        path = "/customer/block" if blocked else "/customer/unblock"
+        return await self._request("POST", path, json={"user_ids": user_ids})
+
+    async def get_customer_daily_activity(
+        self,
+        end_user_ids: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        model: Optional[str] = None,
+        api_key: Optional[str] = None,
+        page: Optional[int] = None,
+        page_size: Optional[int] = None,
+        exclude_end_user_ids: Optional[str] = None,
+    ) -> dict:
+        """Per-customer daily activity (`GET /customer/daily/activity`).
+
+        `start_date` and `end_date` (ISO `YYYY-MM-DD`) are required upstream —
+        omitting either returns HTTP 400, despite the OpenAPI spec marking
+        them optional. `end_user_ids` and `exclude_end_user_ids` are
+        upstream-comma-separated strings (not arrays).
+        """
+        params = {
+            k: v
+            for k, v in {
+                "end_user_ids": end_user_ids,
+                "start_date": start_date,
+                "end_date": end_date,
+                "model": model,
+                "api_key": api_key,
+                "page": page,
+                "page_size": page_size,
+                "exclude_end_user_ids": exclude_end_user_ids,
+            }.items()
+            if v is not None
+        }
+        return await self._request("GET", "/customer/daily/activity", params=params or None)
+
+    # ── Organization operations ──
+
+    async def list_organizations(
+        self,
+        org_id: Optional[str] = None,
+        org_alias: Optional[str] = None,
+    ) -> Any:
+        """List organizations (`GET /organization/list`)."""
+        params = {
+            k: v for k, v in {"org_id": org_id, "org_alias": org_alias}.items() if v is not None
+        }
+        return await self._request("GET", "/organization/list", params=params or None)
+
+    async def get_organization_info(self, organization_id: str) -> dict:
+        """Get a single organization by id (`GET /organization/info`)."""
+        return await self._request(
+            "GET", "/organization/info", params={"organization_id": organization_id}
+        )
+
+    async def create_organization(
+        self,
+        organization_alias: str,
+        organization_id: Optional[str] = None,
+        models: Optional[list[str]] = None,
+        max_budget: Optional[float] = None,
+        soft_budget: Optional[float] = None,
+        budget_id: Optional[str] = None,
+        budget_duration: Optional[str] = None,
+        tpm_limit: Optional[int] = None,
+        rpm_limit: Optional[int] = None,
+        max_parallel_requests: Optional[int] = None,
+        metadata: Optional[dict] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Create an organization (`POST /organization/new`).
+
+        `organization_alias` is the only required field. Other common
+        NewOrganizationRequest fields are surfaced as named args; pass less
+        common ones via `extras`.
+        """
+        body = self._build_body(
+            {
+                "organization_alias": organization_alias,
+                "organization_id": organization_id,
+                "models": models,
+                "max_budget": max_budget,
+                "soft_budget": soft_budget,
+                "budget_id": budget_id,
+                "budget_duration": budget_duration,
+                "tpm_limit": tpm_limit,
+                "rpm_limit": rpm_limit,
+                "max_parallel_requests": max_parallel_requests,
+                "metadata": metadata,
+            },
+            extras,
+        )
+        return await self._request("POST", "/organization/new", json=body)
+
+    async def update_organization(
+        self,
+        organization_id: str,
+        organization_alias: Optional[str] = None,
+        models: Optional[list[str]] = None,
+        max_budget: Optional[float] = None,
+        budget_duration: Optional[str] = None,
+        tpm_limit: Optional[int] = None,
+        rpm_limit: Optional[int] = None,
+        metadata: Optional[dict] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Patch an organization (`PATCH /organization/update`).
+
+        Upstream OpenAPI omits the request body schema for this endpoint, but
+        the implementation accepts an UpdateOrganization payload mirroring
+        NewOrganizationRequest minus the alias requirement. `organization_id`
+        is required in the body to identify the row; other fields are merged
+        sparsely. Use `extras` for any field not surfaced here.
+        """
+        body = self._build_body(
+            {
+                "organization_id": organization_id,
+                "organization_alias": organization_alias,
+                "models": models,
+                "max_budget": max_budget,
+                "budget_duration": budget_duration,
+                "tpm_limit": tpm_limit,
+                "rpm_limit": rpm_limit,
+                "metadata": metadata,
+            },
+            extras,
+        )
+        return await self._request("PATCH", "/organization/update", json=body)
+
+    async def delete_organization(self, organization_ids: list[str]) -> dict:
+        """Batch-delete organizations (`DELETE /organization/delete`).
+
+        Note: this is a `DELETE` with a JSON body — `{"organization_ids": [...]}`.
+        """
+        return await self._request(
+            "DELETE", "/organization/delete", json={"organization_ids": organization_ids}
+        )
+
+    async def add_org_member(
+        self,
+        organization_id: str,
+        member: dict,
+        max_budget_in_organization: Optional[float] = None,
+    ) -> dict:
+        """Add a member to an organization (`POST /organization/member_add`).
+
+        `member` is the upstream Member shape — at minimum
+        `{"user_id" or "user_email": ..., "role": ...}`.
+        """
+        body: dict[str, Any] = {"organization_id": organization_id, "member": member}
+        if max_budget_in_organization is not None:
+            body["max_budget_in_organization"] = max_budget_in_organization
+        return await self._request("POST", "/organization/member_add", json=body)
+
+    async def update_org_member(
+        self,
+        organization_id: str,
+        user_id: Optional[str] = None,
+        user_email: Optional[str] = None,
+        role: Optional[str] = None,
+        max_budget_in_organization: Optional[float] = None,
+    ) -> dict:
+        """Update an org member (`PATCH /organization/member_update`).
+
+        Identify the member by `user_id` or `user_email`. Only the fields you
+        pass are sent.
+        """
+        body = self._build_body(
+            {
+                "organization_id": organization_id,
+                "user_id": user_id,
+                "user_email": user_email,
+                "role": role,
+                "max_budget_in_organization": max_budget_in_organization,
+            }
+        )
+        return await self._request("PATCH", "/organization/member_update", json=body)
+
+    async def delete_org_member(
+        self,
+        organization_id: str,
+        user_id: Optional[str] = None,
+        user_email: Optional[str] = None,
+    ) -> dict:
+        """Remove an org member (`DELETE /organization/member_delete`).
+
+        Identify the member by `user_id` or `user_email`. DELETE with JSON
+        body — supported by the upstream.
+        """
+        body = self._build_body(
+            {"organization_id": organization_id, "user_id": user_id, "user_email": user_email}
+        )
+        return await self._request("DELETE", "/organization/member_delete", json=body)
+
+    async def get_org_daily_activity(
+        self,
+        organization_ids: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        model: Optional[str] = None,
+        api_key: Optional[str] = None,
+        page: Optional[int] = None,
+        page_size: Optional[int] = None,
+        exclude_organization_ids: Optional[str] = None,
+    ) -> dict:
+        """Per-org daily activity (`GET /organization/daily/activity`).
+
+        `start_date` and `end_date` (ISO `YYYY-MM-DD`) are required upstream —
+        omitting either returns HTTP 400, despite the OpenAPI spec marking
+        them optional. `organization_ids` and `exclude_organization_ids` are
+        upstream-comma-separated strings (not arrays).
+        """
+        params = {
+            k: v
+            for k, v in {
+                "organization_ids": organization_ids,
+                "start_date": start_date,
+                "end_date": end_date,
+                "model": model,
+                "api_key": api_key,
+                "page": page,
+                "page_size": page_size,
+                "exclude_organization_ids": exclude_organization_ids,
+            }.items()
+            if v is not None
+        }
+        return await self._request("GET", "/organization/daily/activity", params=params or None)
+
+    # ── Project operations ──
+
+    async def list_projects(self) -> Any:
+        """List projects (`GET /project/list`)."""
+        return await self._request("GET", "/project/list")
+
+    async def get_project_info(self, project_id: str) -> dict:
+        """Get a project by id (`GET /project/info`)."""
+        return await self._request("GET", "/project/info", params={"project_id": project_id})
+
+    async def create_project(
+        self,
+        team_id: str,
+        project_id: Optional[str] = None,
+        project_alias: Optional[str] = None,
+        description: Optional[str] = None,
+        models: Optional[list[str]] = None,
+        max_budget: Optional[float] = None,
+        soft_budget: Optional[float] = None,
+        budget_duration: Optional[str] = None,
+        tpm_limit: Optional[int] = None,
+        rpm_limit: Optional[int] = None,
+        tags: Optional[list[str]] = None,
+        metadata: Optional[dict] = None,
+        guardrails: Optional[list[str]] = None,
+        blocked: Optional[bool] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Create a project (`POST /project/new`).
+
+        `team_id` is required (projects belong to teams). Other fields are
+        optional; pass less-common NewProjectRequest fields via `extras`.
+        """
+        body = self._build_body(
+            {
+                "team_id": team_id,
+                "project_id": project_id,
+                "project_alias": project_alias,
+                "description": description,
+                "models": models,
+                "max_budget": max_budget,
+                "soft_budget": soft_budget,
+                "budget_duration": budget_duration,
+                "tpm_limit": tpm_limit,
+                "rpm_limit": rpm_limit,
+                "tags": tags,
+                "metadata": metadata,
+                "guardrails": guardrails,
+                "blocked": blocked,
+            },
+            extras,
+        )
+        return await self._request("POST", "/project/new", json=body)
+
+    async def update_project(
+        self,
+        project_id: str,
+        project_alias: Optional[str] = None,
+        description: Optional[str] = None,
+        models: Optional[list[str]] = None,
+        max_budget: Optional[float] = None,
+        budget_duration: Optional[str] = None,
+        tpm_limit: Optional[int] = None,
+        rpm_limit: Optional[int] = None,
+        tags: Optional[list[str]] = None,
+        metadata: Optional[dict] = None,
+        guardrails: Optional[list[str]] = None,
+        blocked: Optional[bool] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Update a project (`POST /project/update`).
+
+        Only `project_id` is required; other fields are merged sparsely.
+        """
+        body = self._build_body(
+            {
+                "project_id": project_id,
+                "project_alias": project_alias,
+                "description": description,
+                "models": models,
+                "max_budget": max_budget,
+                "budget_duration": budget_duration,
+                "tpm_limit": tpm_limit,
+                "rpm_limit": rpm_limit,
+                "tags": tags,
+                "metadata": metadata,
+                "guardrails": guardrails,
+                "blocked": blocked,
+            },
+            extras,
+        )
+        return await self._request("POST", "/project/update", json=body)
+
+    async def delete_project(self, project_ids: list[str]) -> dict:
+        """Batch-delete projects (`DELETE /project/delete`).
+
+        DELETE with JSON body — `{"project_ids": [...]}`.
+        """
+        return await self._request("DELETE", "/project/delete", json={"project_ids": project_ids})
+
+    # ── Unified User Access Group operations ──
+    #
+    # Wraps `/v1/unified_access_group/*`. Distinct from model-access-groups
+    # (`/access_group/*`, in #535) — unified access groups gate users/teams
+    # against models, MCP servers, and agents in one shape.
+
+    async def list_user_access_groups(self) -> Any:
+        """List unified user access groups (`GET /v1/unified_access_group`)."""
+        return await self._request("GET", "/v1/unified_access_group")
+
+    async def get_user_access_group(self, access_group_id: str) -> dict:
+        """Get a unified access group by id (`GET /v1/unified_access_group/{id}`)."""
+        return await self._request("GET", f"/v1/unified_access_group/{access_group_id}")
+
+    async def create_user_access_group(
+        self,
+        access_group_name: str,
+        description: Optional[str] = None,
+        access_model_names: Optional[list[str]] = None,
+        access_mcp_server_ids: Optional[list[str]] = None,
+        access_agent_ids: Optional[list[str]] = None,
+        assigned_team_ids: Optional[list[str]] = None,
+        assigned_key_ids: Optional[list[str]] = None,
+    ) -> dict:
+        """Create a unified user access group (`POST /v1/unified_access_group`).
+
+        `access_group_name` is required; the access_* and assigned_* lists are
+        all optional and can be added later via update.
+        """
+        body = self._build_body(
+            {
+                "access_group_name": access_group_name,
+                "description": description,
+                "access_model_names": access_model_names,
+                "access_mcp_server_ids": access_mcp_server_ids,
+                "access_agent_ids": access_agent_ids,
+                "assigned_team_ids": assigned_team_ids,
+                "assigned_key_ids": assigned_key_ids,
+            }
+        )
+        return await self._request("POST", "/v1/unified_access_group", json=body)
+
+    async def update_user_access_group(
+        self,
+        access_group_id: str,
+        access_group_name: Optional[str] = None,
+        description: Optional[str] = None,
+        access_model_names: Optional[list[str]] = None,
+        access_mcp_server_ids: Optional[list[str]] = None,
+        access_agent_ids: Optional[list[str]] = None,
+        assigned_team_ids: Optional[list[str]] = None,
+        assigned_key_ids: Optional[list[str]] = None,
+    ) -> dict:
+        """Update a unified user access group (`PUT /v1/unified_access_group/{id}`).
+
+        All fields are optional; only the ones passed are sent. Note: this is
+        `PUT`, not `PATCH`, but the upstream merges sparsely.
+        """
+        body = self._build_body(
+            {
+                "access_group_name": access_group_name,
+                "description": description,
+                "access_model_names": access_model_names,
+                "access_mcp_server_ids": access_mcp_server_ids,
+                "access_agent_ids": access_agent_ids,
+                "assigned_team_ids": assigned_team_ids,
+                "assigned_key_ids": assigned_key_ids,
+            }
+        )
+        return await self._request(
+            "PUT", f"/v1/unified_access_group/{access_group_id}", json=body or None
+        )
+
+    async def delete_user_access_group(self, access_group_id: str) -> dict:
+        """Delete a unified user access group (`DELETE /v1/unified_access_group/{id}`)."""
+        return await self._request("DELETE", f"/v1/unified_access_group/{access_group_id}")
