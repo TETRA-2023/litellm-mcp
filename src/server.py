@@ -467,6 +467,34 @@ async def generate_key(
 
 
 @mcp.tool()
+async def generate_service_account_key(
+    key_alias: Optional[str] = None,
+    duration: Optional[str] = None,
+    models: Optional[list[str]] = None,
+    max_budget: Optional[float] = None,
+    budget_duration: Optional[str] = None,
+    user_id: Optional[str] = None,
+    team_id: Optional[str] = None,
+    tpm_limit: Optional[int] = None,
+    rpm_limit: Optional[int] = None,
+    metadata: Optional[dict] = None,
+    guardrails: Optional[list[str]] = None,
+    blocked: Optional[bool] = None,
+    extras: Optional[dict] = None,
+) -> dict:
+    """Generate a service-account virtual key (`POST /key/service-account/generate`).
+
+    Same body shape as `generate_key`. Upstream tags the resulting key as a
+    service account (no human user binding required).
+    """
+    return await get_client().generate_service_account_key(
+        key_alias, duration, models, max_budget, budget_duration,
+        user_id, team_id, tpm_limit, rpm_limit, metadata, guardrails,
+        blocked, extras,
+    )
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

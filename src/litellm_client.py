@@ -450,3 +450,43 @@ class LiteLLMClient:
             extras,
         )
         return await self._request("POST", "/key/generate", json=body)
+
+    async def generate_service_account_key(
+        self,
+        key_alias: Optional[str] = None,
+        duration: Optional[str] = None,
+        models: Optional[list[str]] = None,
+        max_budget: Optional[float] = None,
+        budget_duration: Optional[str] = None,
+        user_id: Optional[str] = None,
+        team_id: Optional[str] = None,
+        tpm_limit: Optional[int] = None,
+        rpm_limit: Optional[int] = None,
+        metadata: Optional[dict] = None,
+        guardrails: Optional[list[str]] = None,
+        blocked: Optional[bool] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Generate a service-account virtual key (`POST /key/service-account/generate`).
+
+        Same body shape as `generate_key`, but the upstream tags the key as a
+        service account (no human user binding required).
+        """
+        body = self._build_key_body(
+            {
+                "key_alias": key_alias,
+                "duration": duration,
+                "models": models,
+                "max_budget": max_budget,
+                "budget_duration": budget_duration,
+                "user_id": user_id,
+                "team_id": team_id,
+                "tpm_limit": tpm_limit,
+                "rpm_limit": rpm_limit,
+                "metadata": metadata,
+                "guardrails": guardrails,
+                "blocked": blocked,
+            },
+            extras,
+        )
+        return await self._request("POST", "/key/service-account/generate", json=body)

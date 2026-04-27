@@ -416,6 +416,19 @@ class TestGenerateKey:
         assert call.args[12] == {"agent_id": "a-1", "max_parallel_requests": 4}
 
 
+class TestGenerateServiceAccountKey:
+    @pytest.mark.asyncio
+    async def test_passes_args(self, mock_client):
+        mock_client.generate_service_account_key.return_value = {"key": "sk-svc"}
+        await src.server.generate_service_account_key(
+            key_alias="ci-bot", duration="365d", team_id="t-1"
+        )
+        mock_client.generate_service_account_key.assert_awaited_once_with(
+            "ci-bot", "365d", None, None, None,
+            None, "t-1", None, None, None, None, None, None,
+        )
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client
