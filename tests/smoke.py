@@ -95,7 +95,7 @@ async def run() -> int:
                 results.append(("get_model", True, _summarize(payload)))
             except LiteLLMAPIError as e:
                 if e.status_code == 404:
-                    results.append(("get_model", True, f"404 (passthrough model — wrapper OK)"))
+                    results.append(("get_model", True, "404 (passthrough model — wrapper OK)"))
                 else:
                     results.append(("get_model", False, f"APIError {e.status_code}: {e}"))
         else:
