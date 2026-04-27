@@ -391,3 +391,11 @@ class LiteLLMClient:
             if v is not None
         }
         return await self._request("GET", "/key/aliases", params=params or None)
+
+    async def get_key_info(self, key: Optional[str] = None) -> dict:
+        """Get info about a key (`GET /key/info`).
+
+        If `key` is omitted, returns info about the caller's own key.
+        """
+        params = {"key": key} if key else None
+        return await self._request("GET", "/key/info", params=params)

@@ -412,6 +412,18 @@ async def list_key_aliases(
 
 
 @mcp.tool()
+async def get_key_info(key: Optional[str] = None, verbosity: str = "standard") -> dict:
+    """Get info about a key (`GET /key/info`).
+
+    Args:
+        key: Optional key value. If omitted, returns info about the caller's own key.
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().get_key_info(key)
+    return _filter_response(payload, "key", verbosity)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

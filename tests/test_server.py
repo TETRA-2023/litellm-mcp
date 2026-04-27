@@ -368,6 +368,20 @@ class TestListKeyAliases:
         mock_client.list_key_aliases.assert_awaited_once_with(None, None, "prod", None)
 
 
+class TestGetKeyInfo:
+    @pytest.mark.asyncio
+    async def test_no_key(self, mock_client):
+        mock_client.get_key_info.return_value = {"key_name": "sk-x", "spend": 0}
+        await src.server.get_key_info()
+        mock_client.get_key_info.assert_awaited_once_with(None)
+
+    @pytest.mark.asyncio
+    async def test_with_key(self, mock_client):
+        mock_client.get_key_info.return_value = {"key_name": "sk-x"}
+        await src.server.get_key_info(key="sk-x", verbosity="full")
+        mock_client.get_key_info.assert_awaited_once_with("sk-x")
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client
