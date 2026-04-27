@@ -283,6 +283,19 @@ async def delete_model_access_group(access_group: str) -> dict:
 
 
 @mcp.tool()
+async def list_credentials(verbosity: str = "standard") -> Any:
+    """List provider credentials (`GET /credentials`).
+
+    Credential values are not included; use `get_credential` for details.
+
+    Args:
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().list_credentials()
+    return _filter_response(payload, "credential", verbosity)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

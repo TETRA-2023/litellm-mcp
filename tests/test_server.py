@@ -256,6 +256,16 @@ class TestDeleteModelAccessGroup:
         mock_client.delete_model_access_group.assert_awaited_once_with("engineering")
 
 
+class TestListCredentials:
+    @pytest.mark.asyncio
+    async def test_passthrough(self, mock_client):
+        payload = [{"credential_name": "openai-prod", "credential_info": {}}]
+        mock_client.list_credentials.return_value = payload
+        result = await src.server.list_credentials("full")
+        assert result == payload
+        mock_client.list_credentials.assert_awaited_once()
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

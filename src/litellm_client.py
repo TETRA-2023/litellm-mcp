@@ -272,3 +272,13 @@ class LiteLLMClient:
     async def delete_model_access_group(self, access_group: str) -> dict:
         """Delete a model access group by name (`DELETE /access_group/{access_group}/delete`)."""
         return await self._request("DELETE", f"/access_group/{access_group}/delete")
+
+    # ── Credential operations ──
+
+    async def list_credentials(self) -> Any:
+        """List provider credentials (`GET /credentials`).
+
+        Returns the upstream payload. Credential values themselves are not
+        included — use `get_credential` for details.
+        """
+        return await self._request("GET", "/credentials")
