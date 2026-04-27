@@ -913,6 +913,300 @@ class TestDeleteUserAccessGroup:
         mock_client.delete_user_access_group.assert_awaited_once_with("ag-1")
 
 
+# ── Budget tools ──
+
+
+class TestListBudgets:
+    @pytest.mark.asyncio
+    async def test_minimal_strips_fields(self, mock_client):
+        mock_client.list_budgets.return_value = [
+            {"budget_id": "b-1", "max_budget": 100.0, "tpm_limit": 1000},
+        ]
+        result = await src.server.list_budgets("minimal")
+        assert result == [{"budget_id": "b-1"}]
+
+
+class TestGetBudgetInfo:
+    @pytest.mark.asyncio
+    async def test_passes_list(self, mock_client):
+        mock_client.get_budget_info.return_value = [{"budget_id": "b-1", "max_budget": 50.0}]
+        result = await src.server.get_budget_info(["b-1"], "standard")
+        mock_client.get_budget_info.assert_awaited_once_with(["b-1"])
+        assert result[0]["budget_id"] == "b-1"
+
+
+class TestCreateBudget:
+    @pytest.mark.asyncio
+    async def test_all_fields_optional(self, mock_client):
+        mock_client.create_budget.return_value = {"budget_id": "b-1"}
+        await src.server.create_budget(max_budget=100.0, budget_duration="30d")
+        mock_client.create_budget.assert_awaited_once_with(
+            None, 100.0, None, None, None, None, "30d", None, None, None
+        )
+
+
+class TestUpdateBudget:
+    @pytest.mark.asyncio
+    async def test_required_id(self, mock_client):
+        mock_client.update_budget.return_value = {"ok": True}
+        await src.server.update_budget("b-1", max_budget=200.0)
+        mock_client.update_budget.assert_awaited_once_with(
+            "b-1", 200.0, None, None, None, None, None, None, None, None
+        )
+
+
+class TestDeleteBudget:
+    @pytest.mark.asyncio
+    async def test_passes_id(self, mock_client):
+        mock_client.delete_budget.return_value = {"deleted": True}
+        await src.server.delete_budget("b-1")
+        mock_client.delete_budget.assert_awaited_once_with("b-1")
+
+
+class TestGetBudgetSettings:
+    @pytest.mark.asyncio
+    async def test_passes_id(self, mock_client):
+        mock_client.get_budget_settings.return_value = {"budget_id": "b-1"}
+        await src.server.get_budget_settings("b-1")
+        mock_client.get_budget_settings.assert_awaited_once_with("b-1")
+
+
+# ── Spend tools ──
+
+
+class TestGetGlobalSpendReport:
+    @pytest.mark.asyncio
+    async def test_filters_passed(self, mock_client):
+        mock_client.get_global_spend_report.return_value = []
+        await src.server.get_global_spend_report(
+            start_date="2026-04-01", end_date="2026-04-27", group_by="team"
+        )
+        mock_client.get_global_spend_report.assert_awaited_once_with(
+            "2026-04-01", "2026-04-27", "team", None, None, None, None
+        )
+
+
+class TestListSpendLogs:
+    @pytest.mark.asyncio
+    async def test_filters_to_spend_record(self, mock_client):
+        mock_client.list_spend_logs.return_value = [
+            {
+                "request_id": "r-1",
+                "model": "gpt-4o",
+                "spend": 0.012,
+                "total_tokens": 100,
+                "extra": "drop",
+            }
+        ]
+        result = await src.server.list_spend_logs(api_key="sk-x", verbosity="standard")
+        assert result == [
+            {"request_id": "r-1", "model": "gpt-4o", "spend": 0.012, "total_tokens": 100}
+        ]
+        mock_client.list_spend_logs.assert_awaited_once_with("sk-x", None, None, None, None, None)
+
+    @pytest.mark.asyncio
+    async def test_minimal(self, mock_client):
+        mock_client.list_spend_logs.return_value = [
+            {"request_id": "r-1", "model": "gpt-4o", "spend": 0.012}
+        ]
+        result = await src.server.list_spend_logs(verbosity="minimal")
+        assert result == [{"request_id": "r-1", "model": "gpt-4o"}]
+
+
+class TestListSpendTags:
+    @pytest.mark.asyncio
+    async def test_passthrough(self, mock_client):
+        mock_client.list_spend_tags.return_value = ["tag-a", "tag-b"]
+        result = await src.server.list_spend_tags()
+        assert result == ["tag-a", "tag-b"]
+
+
+class TestCalculateSpend:
+    @pytest.mark.asyncio
+    async def test_prospective(self, mock_client):
+        mock_client.calculate_spend.return_value = {"cost": 0.0023}
+        await src.server.calculate_spend(
+            model="gpt-4o", messages=[{"role": "user", "content": "hi"}]
+        )
+        mock_client.calculate_spend.assert_awaited_once_with(
+            "gpt-4o", [{"role": "user", "content": "hi"}], None
+        )
+
+    @pytest.mark.asyncio
+    async def test_retrospective(self, mock_client):
+        mock_client.calculate_spend.return_value = {"cost": 0.0042}
+        resp = {"choices": [{"message": {"content": "hello"}}]}
+        await src.server.calculate_spend(model="gpt-4o", completion_response=resp)
+        mock_client.calculate_spend.assert_awaited_once_with("gpt-4o", None, resp)
+
+
+class TestGetUserDailyActivity:
+    @pytest.mark.asyncio
+    async def test_filters_passed(self, mock_client):
+        mock_client.get_user_daily_activity.return_value = {"results": []}
+        await src.server.get_user_daily_activity(
+            start_date="2026-04-01", end_date="2026-04-27", user_id="u-1", timezone="Europe/Paris"
+        )
+        mock_client.get_user_daily_activity.assert_awaited_once_with(
+            "2026-04-01", "2026-04-27", None, None, "u-1", None, None, "Europe/Paris"
+        )
+
+
+# ── Execution tools ──
+
+
+class TestChatCompletion:
+    @pytest.mark.asyncio
+    async def test_basic(self, mock_client):
+        raw = {
+            "id": "cmpl-1",
+            "object": "chat.completion",
+            "created": 1,
+            "model": "gpt-4o",
+            "choices": [{"message": {"role": "assistant", "content": "hi"}}],
+            "usage": {"total_tokens": 5},
+            "system_fingerprint": "fp_drop_me",
+        }
+        mock_client.chat_completion.return_value = raw
+        result = await src.server.chat_completion(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": "hello"}],
+            verbosity="standard",
+        )
+        assert "system_fingerprint" not in result
+        assert result["id"] == "cmpl-1"
+        assert result["choices"][0]["message"]["content"] == "hi"
+        mock_client.chat_completion.assert_awaited_once_with(
+            "gpt-4o", [{"role": "user", "content": "hello"}], None
+        )
+
+    @pytest.mark.asyncio
+    async def test_minimal_strips_to_id_model(self, mock_client):
+        mock_client.chat_completion.return_value = {
+            "id": "cmpl-1",
+            "model": "gpt-4o",
+            "choices": [],
+            "usage": {},
+        }
+        result = await src.server.chat_completion(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": "hi"}],
+            verbosity="minimal",
+        )
+        assert result == {"id": "cmpl-1", "model": "gpt-4o"}
+
+    @pytest.mark.asyncio
+    async def test_passes_extra_body(self, mock_client):
+        mock_client.chat_completion.return_value = {"id": "cmpl-1", "model": "x"}
+        await src.server.chat_completion(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": "hi"}],
+            body={"temperature": 0.0, "max_tokens": 64},
+        )
+        mock_client.chat_completion.assert_awaited_once_with(
+            "gpt-4o",
+            [{"role": "user", "content": "hi"}],
+            {"temperature": 0.0, "max_tokens": 64},
+        )
+
+
+class TestCompletion:
+    @pytest.mark.asyncio
+    async def test_basic(self, mock_client):
+        mock_client.completion.return_value = {"id": "cmpl-2", "model": "gpt-3.5-turbo-instruct"}
+        await src.server.completion(model="gpt-3.5-turbo-instruct", prompt="The sky is")
+        mock_client.completion.assert_awaited_once_with(
+            "gpt-3.5-turbo-instruct", "The sky is", None
+        )
+
+
+class TestEmbed:
+    @pytest.mark.asyncio
+    async def test_basic(self, mock_client):
+        mock_client.embed.return_value = {
+            "object": "list",
+            "model": "text-embedding-3-small",
+            "data": [{"embedding": [0.0, 0.1]}],
+            "usage": {"total_tokens": 2},
+        }
+        result = await src.server.embed(
+            model="text-embedding-3-small", input=["hi", "there"], verbosity="standard"
+        )
+        assert result["model"] == "text-embedding-3-small"
+        assert len(result["data"]) == 1
+        mock_client.embed.assert_awaited_once_with("text-embedding-3-small", ["hi", "there"], None)
+
+
+# ── Health tools ──
+
+
+class TestCheckHealth:
+    @pytest.mark.asyncio
+    async def test_no_filter(self, mock_client):
+        mock_client.check_health.return_value = {
+            "healthy_count": 3,
+            "unhealthy_count": 0,
+            "healthy_endpoints": [{"model": "gpt-4o"}],
+            "unhealthy_endpoints": [],
+            "extra": "drop",
+        }
+        result = await src.server.check_health(verbosity="standard")
+        assert "extra" not in result
+        assert result["healthy_count"] == 3
+        mock_client.check_health.assert_awaited_once_with(None, None)
+
+    @pytest.mark.asyncio
+    async def test_with_model_filter(self, mock_client):
+        mock_client.check_health.return_value = {"healthy_count": 1, "unhealthy_count": 0}
+        await src.server.check_health(model="gpt-4o")
+        mock_client.check_health.assert_awaited_once_with("gpt-4o", None)
+
+
+class TestCheckHealthBacklog:
+    @pytest.mark.asyncio
+    async def test_passthrough(self, mock_client):
+        mock_client.check_health_backlog.return_value = {"queue_depth": 0}
+        result = await src.server.check_health_backlog()
+        assert result == {"queue_depth": 0}
+
+
+class TestGetHealthHistory:
+    @pytest.mark.asyncio
+    async def test_filters_passed(self, mock_client):
+        mock_client.get_health_history.return_value = []
+        await src.server.get_health_history(
+            model="gpt-4o", status_filter="unhealthy", limit=50, offset=0
+        )
+        mock_client.get_health_history.assert_awaited_once_with("gpt-4o", "unhealthy", 50, 0)
+
+
+class TestGetHealthLatest:
+    @pytest.mark.asyncio
+    async def test_filters_to_health(self, mock_client):
+        mock_client.get_health_latest.return_value = {
+            "healthy_count": 5,
+            "unhealthy_count": 1,
+            "healthy_endpoints": [],
+            "unhealthy_endpoints": [],
+            "internal_state": "drop",
+        }
+        result = await src.server.get_health_latest("standard")
+        assert "internal_state" not in result
+
+
+class TestTestModelConnection:
+    @pytest.mark.asyncio
+    async def test_required_litellm_params(self, mock_client):
+        mock_client.test_model_connection.return_value = {"status": "ok"}
+        await src.server.test_model_connection(
+            litellm_params={"model": "openai/gpt-4o", "api_key": "sk-x"},
+            mode="chat",
+        )
+        mock_client.test_model_connection.assert_awaited_once_with(
+            {"model": "openai/gpt-4o", "api_key": "sk-x"}, "chat", None
+        )
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client
