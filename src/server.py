@@ -25,6 +25,39 @@ RESPONSE_FIELDS: dict[str, dict[str, Optional[list[str]]]] = {
         "standard": ["id", "object", "owned_by", "created"],
         "full": None,
     },
+    "access_group": {
+        "minimal": ["access_group"],
+        "standard": ["access_group", "model_names", "model_ids"],
+        "full": None,
+    },
+    "credential": {
+        # 'standard' deliberately omits credential_values to avoid leaking
+        # secrets into agent transcripts. Use verbosity='full' to inspect them.
+        "minimal": ["credential_name"],
+        "standard": ["credential_name", "credential_info"],
+        "full": None,
+    },
+    "key": {
+        "minimal": ["token", "key_name", "key_alias"],
+        "standard": [
+            "token",
+            "key_name",
+            "key_alias",
+            "spend",
+            "max_budget",
+            "models",
+            "user_id",
+            "team_id",
+            "expires",
+            "blocked",
+        ],
+        "full": None,
+    },
+    "public_hub": {
+        "minimal": ["model_group"],
+        "standard": ["model_group", "providers", "max_input_tokens", "max_output_tokens"],
+        "full": None,
+    },
 }
 
 VALID_VERBOSITY_LEVELS = {"minimal", "standard", "full"}
