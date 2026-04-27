@@ -505,6 +505,15 @@ class TestResetKeySpend:
         mock_client.reset_key_spend.assert_awaited_once_with("sk-x", 5.5)
 
 
+class TestKeyHealth:
+    @pytest.mark.asyncio
+    async def test_no_args(self, mock_client):
+        mock_client.key_health.return_value = {"status": "healthy"}
+        result = await src.server.key_health()
+        assert result == {"status": "healthy"}
+        mock_client.key_health.assert_awaited_once_with()
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

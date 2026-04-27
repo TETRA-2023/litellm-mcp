@@ -583,3 +583,10 @@ class LiteLLMClient:
         return await self._request(
             "POST", f"/key/{key}/reset_spend", json={"reset_to": reset_to}
         )
+
+    async def key_health(self) -> dict:
+        """Probe the health of the caller's key (`POST /key/health`).
+
+        Returns connectivity / permission status for the bearer key. No body.
+        """
+        return await self._request("POST", "/key/health")

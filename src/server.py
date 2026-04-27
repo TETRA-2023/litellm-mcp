@@ -573,6 +573,15 @@ async def reset_key_spend(key: str, reset_to: float = 0.0) -> dict:
 
 
 @mcp.tool()
+async def key_health() -> dict:
+    """Probe the health of the caller's key (`POST /key/health`).
+
+    Returns connectivity / permission status for the bearer key.
+    """
+    return await get_client().key_health()
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 
