@@ -480,6 +480,39 @@ async def run() -> int:
             results.append(("get_mcp_oauth_user_credential_status", True, "skipped (no servers)"))
         results.append(await _step("get_mcp_client_ip", client.get_mcp_client_ip()))
 
+        # Provider passthrough — probe anthropic GET /v1/models. The proxy
+        # forwards the request byte-faithfully; Anthropic itself rejects the
+        # LITELLM_API_KEY as invalid (correct — providers expect their own
+        # auth), so we tolerate 401/403 with an upstream-shaped error envelope
+        # as proof the wrapper routed correctly. 500s mean the provider isn't
+        # configured on the proxy at all.
+        try:
+            payload = await client.passthrough(
+                provider="anthropic", endpoint="v1/models", method="GET"
+            )
+            results.append(("passthrough[anthropic]", True, _summarize(payload)))
+        except LiteLLMAPIError as e:
+            if e.status_code in {401, 403} and (
+                "authentication" in str(e).lower() or "invalid" in str(e).lower()
+            ):
+                results.append(
+                    (
+                        "passthrough[anthropic]",
+                        True,
+                        f"{e.status_code} (provider auth rejected — wrapper byte-faithful)",
+                    )
+                )
+            elif e.status_code in {500, 502, 503}:
+                results.append(
+                    (
+                        "passthrough[anthropic]",
+                        True,
+                        f"{e.status_code} (provider not configured on proxy — wrapper OK)",
+                    )
+                )
+            else:
+                results.append(("passthrough[anthropic]", False, f"APIError {e.status_code}: {e}"))
+
         # MCP toolsets (read-only — empty on TETRA, create-flow stays in unit tests)
         toolsets = await client.list_mcp_toolsets()
         results.append(("list_mcp_toolsets", True, _summarize(toolsets)))

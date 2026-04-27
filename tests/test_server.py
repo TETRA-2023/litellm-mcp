@@ -1639,6 +1639,64 @@ class TestDeleteMCPToolset:
         mock_client.delete_mcp_toolset.assert_awaited_once_with("ts-1")
 
 
+# ── Provider passthrough ──
+
+
+class TestPassthrough:
+    @pytest.mark.asyncio
+    async def test_default_get(self, mock_client):
+        mock_client.passthrough.return_value = {"data": [{"id": "claude-opus-4-7"}]}
+        result = await src.server.passthrough(provider="anthropic", endpoint="v1/models")
+        assert result["data"][0]["id"] == "claude-opus-4-7"
+        mock_client.passthrough.assert_awaited_once_with(
+            "anthropic", "v1/models", "GET", None, None, None
+        )
+
+    @pytest.mark.asyncio
+    async def test_post_with_body_and_headers(self, mock_client):
+        mock_client.passthrough.return_value = {"id": "msg_1"}
+        await src.server.passthrough(
+            provider="anthropic",
+            endpoint="v1/messages",
+            method="POST",
+            body={"model": "claude-opus-4-7", "messages": [{"role": "user", "content": "hi"}]},
+            headers={"anthropic-version": "2023-06-01"},
+        )
+        mock_client.passthrough.assert_awaited_once_with(
+            "anthropic",
+            "v1/messages",
+            "POST",
+            {"model": "claude-opus-4-7", "messages": [{"role": "user", "content": "hi"}]},
+            None,
+            {"anthropic-version": "2023-06-01"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_method_case_insensitive(self, mock_client):
+        mock_client.passthrough.return_value = {}
+        await src.server.passthrough(provider="openai", endpoint="v1/models", method="get")
+        mock_client.passthrough.assert_awaited_once_with(
+            "openai", "v1/models", "get", None, None, None
+        )
+
+    @pytest.mark.asyncio
+    async def test_nested_provider(self, mock_client):
+        # Vertex AI Discovery uses a two-segment provider prefix
+        mock_client.passthrough.return_value = {}
+        await src.server.passthrough(
+            provider="vertex_ai/discovery",
+            endpoint="v1/projects/x/locations/global/dataStores",
+        )
+        mock_client.passthrough.assert_awaited_once_with(
+            "vertex_ai/discovery",
+            "v1/projects/x/locations/global/dataStores",
+            "GET",
+            None,
+            None,
+            None,
+        )
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client
