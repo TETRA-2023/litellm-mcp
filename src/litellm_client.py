@@ -72,12 +72,15 @@ class LiteLLMClient:
         *,
         params: Optional[dict] = None,
         json: Optional[dict] = None,
+        headers: Optional[dict] = None,
     ) -> Any:
         attempt = 0
         last_exc: Optional[Exception] = None
         while attempt <= self.max_retries:
             try:
-                response = await self._client.request(method, path, params=params, json=json)
+                response = await self._client.request(
+                    method, path, params=params, json=json, headers=headers
+                )
             except httpx.TransportError as exc:
                 last_exc = exc
                 logger.warning(
@@ -2030,3 +2033,44 @@ class LiteLLMClient:
     async def delete_mcp_toolset(self, toolset_id: str) -> dict:
         """Delete an MCP toolset (`DELETE /v1/mcp/toolset/{toolset_id}`)."""
         return await self._request("DELETE", f"/v1/mcp/toolset/{toolset_id}")
+
+    # ── Provider passthrough ──
+
+    async def passthrough(
+        self,
+        provider: str,
+        endpoint: str,
+        method: str = "GET",
+        body: Optional[dict] = None,
+        params: Optional[dict] = None,
+        headers: Optional[dict] = None,
+    ) -> Any:
+        """Proxy a request to a provider's native API via LiteLLM (`<METHOD> /<provider>/<endpoint>`).
+
+        LiteLLM exposes 15+ providers' native APIs at `/<provider>/{endpoint:path}`
+        with all 5 HTTP methods. One generic tool covers ~85 Swagger ops.
+
+        Known providers: `anthropic`, `openai`, `vertex_ai`, `vertex_ai/discovery`,
+        `gemini` (Google AI Studio), `cohere`, `vllm`, `mistral`, `milvus`,
+        `bedrock`, `assemblyai`, `eu.assemblyai`, `azure`, `azure_ai`, `cursor`,
+        `langfuse`. The provider list is fixed by what LiteLLM compiles in.
+
+        Args:
+            provider: provider identifier (path prefix). Forward slashes inside
+                the provider value are preserved (e.g. `vertex_ai/discovery`).
+            endpoint: everything after `/<provider>/` — e.g. `v1/models` or
+                `v1/messages`. Leading slashes are stripped.
+            method: HTTP method (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`).
+                Defaults to GET.
+            body: optional JSON body (for POST/PUT/PATCH).
+            params: optional query parameters.
+            headers: optional headers to forward (e.g. `{"anthropic-version": "..."}`).
+                The `Authorization` Bearer is set by the client and should not
+                be overridden here.
+
+        Returns:
+            The upstream payload as-is — JSON if the response is JSON, else text.
+            Streaming responses are not supported in this slice.
+        """
+        path = f"/{provider.strip('/')}/{endpoint.lstrip('/')}"
+        return await self._request(method.upper(), path, params=params, json=body, headers=headers)

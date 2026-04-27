@@ -19,14 +19,15 @@ MCP server for the LiteLLM proxy. Python 3.12, fastmcp (`mcp.server.fastmcp`), h
 - For body schemas with many optional fields (`GenerateKeyRequest`, `UpdateKeyRequest`, `RegenerateKeyRequest`, `NewUserRequest`, `NewCustomerRequest`, `NewOrganizationRequest`, `NewProjectRequest`), expose ~12 common fields as named args and accept the long tail through an `extras: Optional[dict]` argument (merged into the body via `_build_body`/`_build_key_body`).
 - Keep transport agnostic: never call `print` / write to stdout in stdio mode.
 
-## Current scope (US #534 + #535 + #536 + #596 + #558 + #688)
+## Current scope (US #534 + #535 + #536 + #596 + #558 + #688 + #698)
 
 - **#534 (v1.0.0):** foundation, `list_models`.
 - **#535 (v1.1.0):** 32 admin tools — Models (5), Model Hub (5), Access Groups (5), Credentials (6), Keys (11). All wrapped with unit tests against `AsyncMock(LiteLLMClient)`.
 - **#536 (v1.2.0):** 31 identity tools — Internal Users (5), Customers (7), Organizations (9, incl. member CRUD), Projects (5), Unified User Access Groups (5).
 - **#596 (v1.3.0):** 19 tools — Budgets (6), Spend (5), Execution (3 — chat/completion/embed, synchronous), Health (5).
 - **#558 (v1.4.0):** 25 MCP-Gateway tools — Server CRUD (6), Submissions (3), Health (1), Tool discovery & invocation (4), Discovery/registry/hub (6), User credentials (4), Utility (1). Lets the proxy broker upstream HTTP-transport MCP servers and list/invoke their tools.
-- **#688:** 5 MCP-Toolset tools — `list_mcp_toolsets`, `get_mcp_toolset`, `add_mcp_toolset`, `update_mcp_toolset`, `delete_mcp_toolset`. Toolsets are named bundles of tools sourced from one or more registered MCP servers; the proxy then exposes each toolset as a brokered MCP endpoint at `/toolset/{name}/mcp` (transport-level, not wrapped).
+- **#688 (v1.5.0):** 5 MCP-Toolset tools — `list_mcp_toolsets`, `get_mcp_toolset`, `add_mcp_toolset`, `update_mcp_toolset`, `delete_mcp_toolset`. Toolsets are named bundles of tools sourced from one or more registered MCP servers; the proxy then exposes each toolset as a brokered MCP endpoint at `/toolset/{name}/mcp` (transport-level, not wrapped).
+- **#698:** 1 generic `passthrough(provider, endpoint, method, body, params, headers)` tool — covers ~85 Swagger pass-through ops across 16 provider tags (Anthropic / OpenAI / Vertex AI (+ discovery) / Gemini / Cohere / VLLM / Mistral / Milvus / Bedrock / AssemblyAI (+ EU) / Azure / Azure AI / Cursor / Langfuse). One tool instead of 85 wrappers. `_request()` was extended to accept an optional `headers` kwarg to support provider-specific headers like `anthropic-version`.
 
 ### Upstream quirks
 
@@ -45,6 +46,7 @@ MCP server for the LiteLLM proxy. Python 3.12, fastmcp (`mcp.server.fastmcp`), h
 - `GET /v1/mcp/registry.json` is optional upstream — older / minimal proxy configs return 404. Wrapper returns the upstream payload as-is.
 - `PUT /v1/mcp/toolset` carries `toolset_id` in the body (per `UpdateMCPToolsetRequest`), not the path — same convention as `/v1/mcp/server`.
 - Toolset names share the upstream tool-name validation (A–Z, a–z, 0–9, underscore, dash, dot — no spaces). Spaces in `toolset_name` return HTTP 400 with `Invalid MCP tool prefix`.
+- `passthrough` does not auto-inject provider auth — LiteLLM forwards the request byte-faithfully and the upstream provider authenticates against its own credentials. For providers that require their own API keys (e.g. Anthropic's `x-api-key`), pass them via the `headers` arg or rely on LiteLLM's configured provider credentials. A 401 with a provider-shaped error envelope from `passthrough` is proof the wrapper routed correctly — it's the upstream rejecting auth, not the wrapper.
 
 ## Testing
 
