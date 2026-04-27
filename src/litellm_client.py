@@ -143,3 +143,23 @@ class LiteLLMClient:
         """
         params = {"litellm_model_id": litellm_model_id} if litellm_model_id else None
         return await self._request("GET", "/model/info", params=params)
+
+    async def add_model(
+        self,
+        model_name: str,
+        litellm_params: dict,
+        model_info: dict,
+    ) -> dict:
+        """Register a new model deployment (`POST /model/new`).
+
+        The Deployment schema requires three fields:
+        - `model_name`: alias clients call (e.g. `gpt-4o`).
+        - `litellm_params`: provider routing (`{"model": "openai/gpt-4o", "api_key": ...}`).
+        - `model_info`: deployment metadata (`{"id": "...", "db_model": false, ...}`).
+        """
+        body = {
+            "model_name": model_name,
+            "litellm_params": litellm_params,
+            "model_info": model_info,
+        }
+        return await self._request("POST", "/model/new", json=body)

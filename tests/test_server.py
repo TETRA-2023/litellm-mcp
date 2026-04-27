@@ -97,6 +97,23 @@ class TestGetModelInfo:
         mock_client.get_model_info.assert_awaited_once_with("abc-123")
 
 
+class TestAddModel:
+    @pytest.mark.asyncio
+    async def test_passes_full_body(self, mock_client):
+        mock_client.add_model.return_value = {"model_id": "abc-123"}
+        result = await src.server.add_model(
+            "gpt-4o",
+            {"model": "openai/gpt-4o", "api_key": "sk-x"},
+            {"id": "abc-123"},
+        )
+        assert result == {"model_id": "abc-123"}
+        mock_client.add_model.assert_awaited_once_with(
+            "gpt-4o",
+            {"model": "openai/gpt-4o", "api_key": "sk-x"},
+            {"id": "abc-123"},
+        )
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

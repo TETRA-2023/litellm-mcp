@@ -128,6 +128,23 @@ async def get_model(model_id: str, verbosity: str = "standard") -> dict:
 
 
 @mcp.tool()
+async def add_model(
+    model_name: str,
+    litellm_params: dict,
+    model_info: dict,
+) -> dict:
+    """Register a new model deployment (`POST /model/new`).
+
+    Args:
+        model_name: client-facing alias (e.g. `gpt-4o`).
+        litellm_params: provider routing dict (e.g.
+            `{"model": "openai/gpt-4o", "api_key": "sk-..."}`).
+        model_info: deployment metadata (e.g. `{"id": "...", "db_model": false}`).
+    """
+    return await get_client().add_model(model_name, litellm_params, model_info)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 
