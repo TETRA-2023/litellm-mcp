@@ -360,6 +360,14 @@ class TestListKeys:
         )
 
 
+class TestListKeyAliases:
+    @pytest.mark.asyncio
+    async def test_search_filter(self, mock_client):
+        mock_client.list_key_aliases.return_value = {"data": []}
+        await src.server.list_key_aliases(search="prod")
+        mock_client.list_key_aliases.assert_awaited_once_with(None, None, "prod", None)
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

@@ -398,6 +398,20 @@ async def list_keys(
 
 
 @mcp.tool()
+async def list_key_aliases(
+    page: Optional[int] = None,
+    size: Optional[int] = None,
+    search: Optional[str] = None,
+    team_id: Optional[str] = None,
+) -> dict:
+    """List key aliases (`GET /key/aliases`).
+
+    Lighter-weight than `list_keys`; returns only alias metadata.
+    """
+    return await get_client().list_key_aliases(page, size, search, team_id)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

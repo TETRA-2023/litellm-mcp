@@ -373,3 +373,21 @@ class LiteLLMClient:
             if v is not None
         }
         return await self._request("GET", "/key/list", params=params or None)
+
+    async def list_key_aliases(
+        self,
+        page: Optional[int] = None,
+        size: Optional[int] = None,
+        search: Optional[str] = None,
+        team_id: Optional[str] = None,
+    ) -> dict:
+        """List key aliases (`GET /key/aliases`).
+
+        Lighter-weight listing than `list_keys`; returns only alias metadata.
+        """
+        params = {
+            k: v
+            for k, v in {"page": page, "size": size, "search": search, "team_id": team_id}.items()
+            if v is not None
+        }
+        return await self._request("GET", "/key/aliases", params=params or None)
