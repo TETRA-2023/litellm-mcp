@@ -130,6 +130,56 @@ RESPONSE_FIELDS: dict[str, dict[str, Optional[list[str]]]] = {
         ],
         "full": None,
     },
+    "budget": {
+        "minimal": ["budget_id"],
+        "standard": [
+            "budget_id",
+            "max_budget",
+            "soft_budget",
+            "budget_duration",
+            "tpm_limit",
+            "rpm_limit",
+            "model_max_budget",
+            "budget_reset_at",
+        ],
+        "full": None,
+    },
+    "spend_record": {
+        "minimal": ["request_id", "model"],
+        "standard": [
+            "request_id",
+            "call_type",
+            "api_key",
+            "user",
+            "team_id",
+            "model",
+            "total_tokens",
+            "spend",
+            "startTime",
+            "endTime",
+        ],
+        "full": None,
+    },
+    "chat_completion": {
+        "minimal": ["id", "model"],
+        "standard": ["id", "object", "created", "model", "choices", "usage"],
+        "full": None,
+    },
+    "embedding": {
+        "minimal": ["model"],
+        "standard": ["object", "model", "data", "usage"],
+        "full": None,
+    },
+    "health": {
+        "minimal": ["healthy_count", "unhealthy_count"],
+        "standard": [
+            "healthy_count",
+            "unhealthy_count",
+            "healthy_endpoints",
+            "unhealthy_endpoints",
+        ],
+        "full": None,
+    },
 }
 
 VALID_VERBOSITY_LEVELS = {"minimal", "standard", "full"}
@@ -1429,6 +1479,355 @@ async def update_user_access_group(
 async def delete_user_access_group(access_group_id: str) -> dict:
     """Delete a unified user access group (`DELETE /v1/unified_access_group/{id}`)."""
     return await get_client().delete_user_access_group(access_group_id)
+
+
+# ── Budget tools ──
+
+
+@mcp.tool()
+async def list_budgets(verbosity: str = "standard") -> Any:
+    """List configured budgets (`GET /budget/list`).
+
+    Args:
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().list_budgets()
+    return _filter_response(payload, "budget", verbosity)
+
+
+@mcp.tool()
+async def get_budget_info(budgets: list[str], verbosity: str = "standard") -> Any:
+    """Get info about one or more budgets (`POST /budget/info`).
+
+    Despite the GET-shaped name, the upstream uses POST with a body
+    `{"budgets": [...]}` — this is a batch lookup, not a per-id GET.
+
+    Args:
+        budgets: list of budget ids/names to fetch.
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().get_budget_info(budgets)
+    return _filter_response(payload, "budget", verbosity)
+
+
+@mcp.tool()
+async def create_budget(
+    budget_id: Optional[str] = None,
+    max_budget: Optional[float] = None,
+    soft_budget: Optional[float] = None,
+    max_parallel_requests: Optional[int] = None,
+    tpm_limit: Optional[int] = None,
+    rpm_limit: Optional[int] = None,
+    budget_duration: Optional[str] = None,
+    model_max_budget: Optional[dict] = None,
+    budget_reset_at: Optional[str] = None,
+    extras: Optional[dict] = None,
+) -> dict:
+    """Create a budget (`POST /budget/new`).
+
+    All fields optional per upstream `BudgetNewRequest`. Use `extras` for any
+    field not surfaced as a named arg.
+
+    Args:
+        budget_id: optional explicit id (upstream auto-generates if omitted).
+        max_budget: hard spend cap (USD).
+        soft_budget: warning threshold below the hard cap.
+        budget_duration: reset window (e.g. `30d`).
+        model_max_budget: per-model caps, e.g. `{"gpt-4o": {"budget_limit": 10.0}}`.
+    """
+    return await get_client().create_budget(
+        budget_id,
+        max_budget,
+        soft_budget,
+        max_parallel_requests,
+        tpm_limit,
+        rpm_limit,
+        budget_duration,
+        model_max_budget,
+        budget_reset_at,
+        extras,
+    )
+
+
+@mcp.tool()
+async def update_budget(
+    budget_id: str,
+    max_budget: Optional[float] = None,
+    soft_budget: Optional[float] = None,
+    max_parallel_requests: Optional[int] = None,
+    tpm_limit: Optional[int] = None,
+    rpm_limit: Optional[int] = None,
+    budget_duration: Optional[str] = None,
+    model_max_budget: Optional[dict] = None,
+    budget_reset_at: Optional[str] = None,
+    extras: Optional[dict] = None,
+) -> dict:
+    """Update a budget (`POST /budget/update`).
+
+    Same `BudgetNewRequest` shape as create — `budget_id` identifies the row.
+    """
+    return await get_client().update_budget(
+        budget_id,
+        max_budget,
+        soft_budget,
+        max_parallel_requests,
+        tpm_limit,
+        rpm_limit,
+        budget_duration,
+        model_max_budget,
+        budget_reset_at,
+        extras,
+    )
+
+
+@mcp.tool()
+async def delete_budget(budget_id: str) -> dict:
+    """Delete a budget (`POST /budget/delete`).
+
+    Body is `{"id": <budget_id>}` per upstream `BudgetDeleteRequest`.
+    """
+    return await get_client().delete_budget(budget_id)
+
+
+@mcp.tool()
+async def get_budget_settings(budget_id: str) -> dict:
+    """Get effective budget settings (`GET /budget/settings`).
+
+    Args:
+        budget_id: required query param identifying the budget row.
+    """
+    return await get_client().get_budget_settings(budget_id)
+
+
+# ── Spend tools ──
+
+
+@mcp.tool()
+async def get_global_spend_report(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    group_by: Optional[str] = None,
+    api_key: Optional[str] = None,
+    internal_user_id: Optional[str] = None,
+    team_id: Optional[str] = None,
+    customer_id: Optional[str] = None,
+) -> Any:
+    """Aggregated global spend report (`GET /global/spend/report`).
+
+    All filters are optional query params.
+
+    Args:
+        start_date / end_date: ISO `YYYY-MM-DD`.
+        group_by: upstream-defined dimension (`team`, `customer`, `api_key`, `model`).
+    """
+    return await get_client().get_global_spend_report(
+        start_date, end_date, group_by, api_key, internal_user_id, team_id, customer_id
+    )
+
+
+@mcp.tool()
+async def list_spend_logs(
+    api_key: Optional[str] = None,
+    user_id: Optional[str] = None,
+    request_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    summarize: Optional[bool] = None,
+    verbosity: str = "standard",
+) -> Any:
+    """List per-request spend logs (`GET /spend/logs`).
+
+    Args:
+        summarize: True to return aggregated rows.
+        verbosity: 'minimal' / 'standard' / 'full' — applied to the spend_record items.
+    """
+    payload = await get_client().list_spend_logs(
+        api_key, user_id, request_id, start_date, end_date, summarize
+    )
+    return _filter_response(payload, "spend_record", verbosity)
+
+
+@mcp.tool()
+async def list_spend_tags(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> Any:
+    """List distinct spend tags within a date window (`GET /spend/tags`)."""
+    return await get_client().list_spend_tags(start_date, end_date)
+
+
+@mcp.tool()
+async def calculate_spend(
+    model: Optional[str] = None,
+    messages: Optional[list[dict]] = None,
+    completion_response: Optional[dict] = None,
+) -> dict:
+    """Estimate spend for a request (`POST /spend/calculate`).
+
+    Either pass `model + messages` for a prospective estimate, or
+    `model + completion_response` for a retrospective re-cost.
+    """
+    return await get_client().calculate_spend(model, messages, completion_response)
+
+
+@mcp.tool()
+async def get_user_daily_activity(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+    user_id: Optional[str] = None,
+    page: Optional[int] = None,
+    page_size: Optional[int] = None,
+    timezone: Optional[str] = None,
+) -> dict:
+    """Per-user daily activity (`GET /user/daily/activity`).
+
+    Args:
+        start_date / end_date: ISO `YYYY-MM-DD` recommended.
+        timezone: IANA tz string (e.g. `Europe/Paris`) for daily-bucket alignment.
+    """
+    return await get_client().get_user_daily_activity(
+        start_date, end_date, model, api_key, user_id, page, page_size, timezone
+    )
+
+
+# ── Execution tools ──
+
+
+@mcp.tool()
+async def chat_completion(
+    model: str,
+    messages: list[dict],
+    body: Optional[dict] = None,
+    verbosity: str = "standard",
+) -> dict:
+    """Chat completion (`POST /v1/chat/completions`).
+
+    Synchronous only — `stream` is stripped from the body if passed. Use `body`
+    for any extra OpenAI / LiteLLM fields (temperature, max_tokens, tools, etc.).
+
+    Args:
+        model: model_name alias (e.g. `gpt-4o`, `claude-opus-4-7`).
+        messages: OpenAI-shaped message list.
+        body: optional dict of additional request fields.
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().chat_completion(model, messages, body)
+    return _filter_response(payload, "chat_completion", verbosity)
+
+
+@mcp.tool()
+async def completion(
+    model: str,
+    prompt: str,
+    body: Optional[dict] = None,
+    verbosity: str = "standard",
+) -> dict:
+    """Legacy text completion (`POST /v1/completions`).
+
+    Synchronous only — `stream` is stripped from the body if passed. The
+    upstream OpenAPI spec only documents a `model` query param for this
+    endpoint, but the implementation accepts the full OpenAI `/v1/completions`
+    body — we send `model` in both query and body.
+
+    Args:
+        model: model_name alias.
+        prompt: text prompt.
+        body: optional dict of additional fields (max_tokens, temperature, etc.).
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().completion(model, prompt, body)
+    return _filter_response(payload, "chat_completion", verbosity)
+
+
+@mcp.tool()
+async def embed(
+    model: str,
+    input: list[str],
+    body: Optional[dict] = None,
+    verbosity: str = "standard",
+) -> dict:
+    """Generate embeddings (`POST /v1/embeddings`).
+
+    Args:
+        model: embedding model_name alias.
+        input: list of input strings (wrap a single string as `[text]`).
+        body: optional dict of additional fields (`dimensions`, `encoding_format`, ...).
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().embed(model, input, body)
+    return _filter_response(payload, "embedding", verbosity)
+
+
+# ── Health tools ──
+
+
+@mcp.tool()
+async def check_health(
+    model: Optional[str] = None,
+    model_id: Optional[str] = None,
+    verbosity: str = "standard",
+) -> dict:
+    """Run upstream health checks against deployments (`GET /health`).
+
+    Args:
+        model: optional model_name alias to narrow the probe.
+        model_id: optional litellm internal id to narrow the probe.
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().check_health(model, model_id)
+    return _filter_response(payload, "health", verbosity)
+
+
+@mcp.tool()
+async def check_health_backlog() -> dict:
+    """Get health-check queue backlog (`GET /health/backlog`)."""
+    return await get_client().check_health_backlog()
+
+
+@mcp.tool()
+async def get_health_history(
+    model: Optional[str] = None,
+    status_filter: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: Optional[int] = None,
+) -> dict:
+    """Historical health check results (`GET /health/history`).
+
+    Args:
+        status_filter: upstream status (`healthy` / `unhealthy`).
+    """
+    return await get_client().get_health_history(model, status_filter, limit, offset)
+
+
+@mcp.tool()
+async def get_health_latest(verbosity: str = "standard") -> dict:
+    """Latest health check snapshot (`GET /health/latest`).
+
+    Args:
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().get_health_latest()
+    return _filter_response(payload, "health", verbosity)
+
+
+@mcp.tool()
+async def test_model_connection(
+    litellm_params: dict,
+    mode: Optional[str] = None,
+    model_info: Optional[dict] = None,
+) -> dict:
+    """Test a candidate deployment connection (`POST /health/test_connection`).
+
+    Useful for validating provider credentials before calling `add_model`.
+
+    Args:
+        litellm_params: provider routing dict (same shape as `add_model`).
+        mode: probe mode (`chat`, `embedding`, `completion`).
+        model_info: optional deployment metadata.
+    """
+    return await get_client().test_model_connection(litellm_params, mode, model_info)
 
 
 # ── Entrypoint ──
