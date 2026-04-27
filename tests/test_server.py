@@ -56,6 +56,31 @@ class TestListModels:
         assert result[0]["id"] == "x"
 
 
+class TestGetModel:
+    @pytest.mark.asyncio
+    async def test_returns_model_dict(self, mock_client):
+        mock_client.get_model.return_value = {
+            "id": "gpt-4o",
+            "object": "model",
+            "owned_by": "openai",
+            "created": 0,
+        }
+        result = await src.server.get_model("gpt-4o", "standard")
+        assert result["id"] == "gpt-4o"
+        mock_client.get_model.assert_awaited_once_with("gpt-4o")
+
+    @pytest.mark.asyncio
+    async def test_minimal_strips_fields(self, mock_client):
+        mock_client.get_model.return_value = {
+            "id": "gpt-4o",
+            "object": "model",
+            "owned_by": "openai",
+            "created": 1,
+        }
+        result = await src.server.get_model("gpt-4o", "minimal")
+        assert result == {"id": "gpt-4o"}
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

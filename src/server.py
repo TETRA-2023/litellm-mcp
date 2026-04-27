@@ -115,6 +115,18 @@ async def list_models(verbosity: str = "standard") -> list[dict]:
     return _filter_response(models, "model", verbosity)
 
 
+@mcp.tool()
+async def get_model(model_id: str, verbosity: str = "standard") -> dict:
+    """Get a single model entry by id (`GET /v1/models/{model_id}`).
+
+    Args:
+        model_id: The OpenAI-style model id (e.g. `gpt-4o`).
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    model = await get_client().get_model(model_id)
+    return _filter_response(model, "model", verbosity)
+
+
 # ── Entrypoint ──
 
 

@@ -127,3 +127,10 @@ class LiteLLMClient:
         if isinstance(payload, list):
             return payload
         return []
+
+    async def get_model(self, model_id: str) -> dict:
+        """Get a single model entry from the OpenAI-compatible models endpoint.
+
+        Calls `GET /v1/models/{model_id}`.
+        """
+        return await self._request("GET", f"/v1/models/{model_id}")
