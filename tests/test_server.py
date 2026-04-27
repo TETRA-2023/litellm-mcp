@@ -114,6 +114,27 @@ class TestAddModel:
         )
 
 
+class TestUpdateModel:
+    @pytest.mark.asyncio
+    async def test_only_passes_set_fields(self, mock_client):
+        mock_client.update_model.return_value = {"ok": True}
+        await src.server.update_model("abc-123", model_name="gpt-4o-mini")
+        mock_client.update_model.assert_awaited_once_with("abc-123", "gpt-4o-mini", None, None)
+
+    @pytest.mark.asyncio
+    async def test_passes_all_fields(self, mock_client):
+        mock_client.update_model.return_value = {"ok": True}
+        await src.server.update_model(
+            "abc-123",
+            model_name="x",
+            litellm_params={"model": "y"},
+            model_info={"id": "abc-123"},
+        )
+        mock_client.update_model.assert_awaited_once_with(
+            "abc-123", "x", {"model": "y"}, {"id": "abc-123"}
+        )
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

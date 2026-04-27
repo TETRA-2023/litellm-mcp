@@ -145,6 +145,21 @@ async def add_model(
 
 
 @mcp.tool()
+async def update_model(
+    model_id: str,
+    model_name: Optional[str] = None,
+    litellm_params: Optional[dict] = None,
+    model_info: Optional[dict] = None,
+) -> dict:
+    """Patch an existing model deployment (`PATCH /model/{model_id}/update`).
+
+    Only the provided fields are sent. The deployment id (`model_id`) goes in
+    the path, not the body.
+    """
+    return await get_client().update_model(model_id, model_name, litellm_params, model_info)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

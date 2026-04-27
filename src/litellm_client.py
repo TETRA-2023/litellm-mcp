@@ -163,3 +163,23 @@ class LiteLLMClient:
             "model_info": model_info,
         }
         return await self._request("POST", "/model/new", json=body)
+
+    async def update_model(
+        self,
+        model_id: str,
+        model_name: Optional[str] = None,
+        litellm_params: Optional[dict] = None,
+        model_info: Optional[dict] = None,
+    ) -> dict:
+        """Patch an existing model deployment (`PATCH /model/{model_id}/update`).
+
+        All body fields are optional; only those passed will be sent.
+        """
+        body: dict[str, Any] = {}
+        if model_name is not None:
+            body["model_name"] = model_name
+        if litellm_params is not None:
+            body["litellm_params"] = litellm_params
+        if model_info is not None:
+            body["model_info"] = model_info
+        return await self._request("PATCH", f"/model/{model_id}/update", json=body)
