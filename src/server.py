@@ -235,6 +235,18 @@ RESPONSE_FIELDS: dict[str, dict[str, Optional[list[str]]]] = {
         ],
         "full": None,
     },
+    "mcp_toolset": {
+        "minimal": ["toolset_id", "toolset_name"],
+        "standard": [
+            "toolset_id",
+            "toolset_name",
+            "description",
+            "tools",
+            "created_at",
+            "updated_at",
+        ],
+        "full": None,
+    },
 }
 
 VALID_VERBOSITY_LEVELS = {"minimal", "standard", "full"}
@@ -2302,6 +2314,76 @@ async def get_mcp_client_ip() -> dict:
     through an external service.
     """
     return await get_client().get_mcp_client_ip()
+
+
+# ── MCP Toolset operations ──
+
+
+@mcp.tool()
+async def list_mcp_toolsets(verbosity: str = "standard") -> Any:
+    """List defined MCP toolsets (`GET /v1/mcp/toolset`).
+
+    Toolsets are named bundles of tools sourced from one or more registered
+    MCP servers. Once defined, the proxy exposes each toolset as a brokered
+    MCP endpoint at `/toolset/{name}/mcp` (transport-level — not wrapped here).
+
+    Args:
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().list_mcp_toolsets()
+    return _filter_response(payload, "mcp_toolset", verbosity)
+
+
+@mcp.tool()
+async def get_mcp_toolset(toolset_id: str, verbosity: str = "standard") -> dict:
+    """Get a single MCP toolset by id (`GET /v1/mcp/toolset/{toolset_id}`).
+
+    Args:
+        toolset_id: upstream toolset id (UUID-shaped).
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().get_mcp_toolset(toolset_id)
+    return _filter_response(payload, "mcp_toolset", verbosity)
+
+
+@mcp.tool()
+async def add_mcp_toolset(
+    toolset_name: str,
+    tools: list[str],
+    description: Optional[str] = None,
+) -> dict:
+    """Create an MCP toolset (`POST /v1/mcp/toolset`).
+
+    Args:
+        toolset_name: human-readable name (must satisfy upstream tool-name
+            constraints: A–Z, a–z, 0–9, underscore, dash, dot — no spaces).
+        tools: list of tool identifiers, typically `<server_alias>/<tool_name>`
+            strings sourced from `list_mcp_tools()`.
+        description: optional human-readable description.
+    """
+    return await get_client().add_mcp_toolset(toolset_name, tools, description)
+
+
+@mcp.tool()
+async def update_mcp_toolset(
+    toolset_id: str,
+    toolset_name: Optional[str] = None,
+    description: Optional[str] = None,
+    tools: Optional[list[str]] = None,
+) -> dict:
+    """Update an MCP toolset (`PUT /v1/mcp/toolset`).
+
+    Note: like `update_mcp_server`, the id goes in the body (per
+    `UpdateMCPToolsetRequest`), not the path. Only the fields you pass are
+    sent.
+    """
+    return await get_client().update_mcp_toolset(toolset_id, toolset_name, description, tools)
+
+
+@mcp.tool()
+async def delete_mcp_toolset(toolset_id: str) -> dict:
+    """Delete an MCP toolset (`DELETE /v1/mcp/toolset/{toolset_id}`)."""
+    return await get_client().delete_mcp_toolset(toolset_id)
 
 
 # ── Entrypoint ──
