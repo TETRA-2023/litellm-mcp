@@ -1245,3 +1245,346 @@ class LiteLLMClient:
     async def delete_user_access_group(self, access_group_id: str) -> dict:
         """Delete a unified user access group (`DELETE /v1/unified_access_group/{id}`)."""
         return await self._request("DELETE", f"/v1/unified_access_group/{access_group_id}")
+
+    # ── Budget operations ──
+
+    async def list_budgets(self) -> Any:
+        """List configured budgets (`GET /budget/list`)."""
+        return await self._request("GET", "/budget/list")
+
+    async def get_budget_info(self, budgets: list[str]) -> Any:
+        """Get info about one or more budgets (`POST /budget/info`).
+
+        Body shape is `{"budgets": [...]}` — the upstream `BudgetRequest` schema
+        treats this as a batch lookup, not a single-id GET.
+        """
+        return await self._request("POST", "/budget/info", json={"budgets": budgets})
+
+    async def create_budget(
+        self,
+        budget_id: Optional[str] = None,
+        max_budget: Optional[float] = None,
+        soft_budget: Optional[float] = None,
+        max_parallel_requests: Optional[int] = None,
+        tpm_limit: Optional[int] = None,
+        rpm_limit: Optional[int] = None,
+        budget_duration: Optional[str] = None,
+        model_max_budget: Optional[dict] = None,
+        budget_reset_at: Optional[str] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Create a budget (`POST /budget/new`).
+
+        All fields optional per upstream `BudgetNewRequest`. `model_max_budget`
+        is a per-model cap mapping like `{"gpt-4o": {"budget_limit": 10.0}}`.
+        """
+        body = self._build_body(
+            {
+                "budget_id": budget_id,
+                "max_budget": max_budget,
+                "soft_budget": soft_budget,
+                "max_parallel_requests": max_parallel_requests,
+                "tpm_limit": tpm_limit,
+                "rpm_limit": rpm_limit,
+                "budget_duration": budget_duration,
+                "model_max_budget": model_max_budget,
+                "budget_reset_at": budget_reset_at,
+            },
+            extras,
+        )
+        return await self._request("POST", "/budget/new", json=body)
+
+    async def update_budget(
+        self,
+        budget_id: str,
+        max_budget: Optional[float] = None,
+        soft_budget: Optional[float] = None,
+        max_parallel_requests: Optional[int] = None,
+        tpm_limit: Optional[int] = None,
+        rpm_limit: Optional[int] = None,
+        budget_duration: Optional[str] = None,
+        model_max_budget: Optional[dict] = None,
+        budget_reset_at: Optional[str] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Update a budget (`POST /budget/update`).
+
+        Same `BudgetNewRequest` shape as create — `budget_id` identifies the row.
+        """
+        body = self._build_body(
+            {
+                "budget_id": budget_id,
+                "max_budget": max_budget,
+                "soft_budget": soft_budget,
+                "max_parallel_requests": max_parallel_requests,
+                "tpm_limit": tpm_limit,
+                "rpm_limit": rpm_limit,
+                "budget_duration": budget_duration,
+                "model_max_budget": model_max_budget,
+                "budget_reset_at": budget_reset_at,
+            },
+            extras,
+        )
+        return await self._request("POST", "/budget/update", json=body)
+
+    async def delete_budget(self, budget_id: str) -> dict:
+        """Delete a budget (`POST /budget/delete`).
+
+        Body is `{"id": <budget_id>}` per upstream `BudgetDeleteRequest`.
+        """
+        return await self._request("POST", "/budget/delete", json={"id": budget_id})
+
+    async def get_budget_settings(self, budget_id: str) -> dict:
+        """Get effective budget settings (`GET /budget/settings`).
+
+        `budget_id` is a required query param.
+        """
+        return await self._request("GET", "/budget/settings", params={"budget_id": budget_id})
+
+    # ── Spend operations ──
+
+    async def get_global_spend_report(
+        self,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        group_by: Optional[str] = None,
+        api_key: Optional[str] = None,
+        internal_user_id: Optional[str] = None,
+        team_id: Optional[str] = None,
+        customer_id: Optional[str] = None,
+    ) -> Any:
+        """Aggregated global spend report (`GET /global/spend/report`).
+
+        All filters are optional query params. `group_by` accepts upstream-defined
+        values like `team`, `customer`, `api_key`, `model`.
+        """
+        params = {
+            k: v
+            for k, v in {
+                "start_date": start_date,
+                "end_date": end_date,
+                "group_by": group_by,
+                "api_key": api_key,
+                "internal_user_id": internal_user_id,
+                "team_id": team_id,
+                "customer_id": customer_id,
+            }.items()
+            if v is not None
+        }
+        return await self._request("GET", "/global/spend/report", params=params or None)
+
+    async def list_spend_logs(
+        self,
+        api_key: Optional[str] = None,
+        user_id: Optional[str] = None,
+        request_id: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        summarize: Optional[bool] = None,
+    ) -> Any:
+        """List per-request spend logs (`GET /spend/logs`).
+
+        All filters are optional. `summarize=True` returns aggregated rows.
+        """
+        params = {
+            k: v
+            for k, v in {
+                "api_key": api_key,
+                "user_id": user_id,
+                "request_id": request_id,
+                "start_date": start_date,
+                "end_date": end_date,
+                "summarize": summarize,
+            }.items()
+            if v is not None
+        }
+        return await self._request("GET", "/spend/logs", params=params or None)
+
+    async def list_spend_tags(
+        self,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> Any:
+        """List distinct spend tags within a date window (`GET /spend/tags`)."""
+        params = {
+            k: v
+            for k, v in {"start_date": start_date, "end_date": end_date}.items()
+            if v is not None
+        }
+        return await self._request("GET", "/spend/tags", params=params or None)
+
+    async def calculate_spend(
+        self,
+        model: Optional[str] = None,
+        messages: Optional[list[dict]] = None,
+        completion_response: Optional[dict] = None,
+    ) -> dict:
+        """Estimate spend for a request (`POST /spend/calculate`).
+
+        Per upstream `SpendCalculateRequest`, callers can either:
+        - pass `model + messages` for a prospective cost estimate, or
+        - pass `model + completion_response` for a retrospective re-cost.
+        """
+        body = self._build_body(
+            {
+                "model": model,
+                "messages": messages,
+                "completion_response": completion_response,
+            }
+        )
+        return await self._request("POST", "/spend/calculate", json=body)
+
+    async def get_user_daily_activity(
+        self,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        model: Optional[str] = None,
+        api_key: Optional[str] = None,
+        user_id: Optional[str] = None,
+        page: Optional[int] = None,
+        page_size: Optional[int] = None,
+        timezone: Optional[str] = None,
+    ) -> dict:
+        """Per-user daily activity (`GET /user/daily/activity`).
+
+        Mirrors the customer/org daily-activity shape but scoped to the
+        internal-user dimension. Supplying `start_date` / `end_date` is
+        recommended (the upstream has been observed to reject open-ended ranges
+        on related endpoints).
+        """
+        params = {
+            k: v
+            for k, v in {
+                "start_date": start_date,
+                "end_date": end_date,
+                "model": model,
+                "api_key": api_key,
+                "user_id": user_id,
+                "page": page,
+                "page_size": page_size,
+                "timezone": timezone,
+            }.items()
+            if v is not None
+        }
+        return await self._request("GET", "/user/daily/activity", params=params or None)
+
+    # ── Execution operations ──
+
+    async def chat_completion(
+        self,
+        model: str,
+        messages: list[dict],
+        body: Optional[dict] = None,
+    ) -> dict:
+        """Chat completion (`POST /v1/chat/completions`).
+
+        Synchronous only — streaming is not exposed in this slice (would need a
+        different transport contract on the MCP side). Pass any extra OpenAI /
+        LiteLLM body fields (temperature, max_tokens, tools, etc.) via `body`.
+        """
+        payload: dict[str, Any] = dict(body) if body else {}
+        payload["model"] = model
+        payload["messages"] = messages
+        payload.pop("stream", None)
+        return await self._request("POST", "/v1/chat/completions", json=payload)
+
+    async def completion(
+        self,
+        model: str,
+        prompt: str,
+        body: Optional[dict] = None,
+    ) -> dict:
+        """Legacy text completion (`POST /v1/completions`).
+
+        OpenAPI declares only a `model` query param and no body schema, but the
+        upstream still accepts the OpenAI-shaped body (`prompt`, `max_tokens`,
+        etc.). We send `model` in both query and body to satisfy both routing
+        paths.
+        """
+        payload: dict[str, Any] = dict(body) if body else {}
+        payload["model"] = model
+        payload["prompt"] = prompt
+        payload.pop("stream", None)
+        return await self._request("POST", "/v1/completions", params={"model": model}, json=payload)
+
+    async def embed(
+        self,
+        model: str,
+        input: list[str],
+        body: Optional[dict] = None,
+    ) -> dict:
+        """Generate embeddings (`POST /v1/embeddings`).
+
+        Pass any extra fields (e.g. `dimensions`, `encoding_format`, `user`)
+        via `body`. `input` is a list of strings; single-string callers should
+        wrap as `[text]`.
+        """
+        payload: dict[str, Any] = dict(body) if body else {}
+        payload["model"] = model
+        payload["input"] = input
+        return await self._request("POST", "/v1/embeddings", json=payload)
+
+    # ── Health operations ──
+
+    async def check_health(
+        self,
+        model: Optional[str] = None,
+        model_id: Optional[str] = None,
+    ) -> dict:
+        """Run upstream health checks against deployments (`GET /health`).
+
+        Optionally narrow to a single deployment via `model` (model_name alias)
+        or `model_id` (litellm internal id).
+        """
+        params = {k: v for k, v in {"model": model, "model_id": model_id}.items() if v is not None}
+        return await self._request("GET", "/health", params=params or None)
+
+    async def check_health_backlog(self) -> dict:
+        """Get health-check queue backlog (`GET /health/backlog`)."""
+        return await self._request("GET", "/health/backlog")
+
+    async def get_health_history(
+        self,
+        model: Optional[str] = None,
+        status_filter: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+    ) -> dict:
+        """Historical health check results (`GET /health/history`).
+
+        `status_filter` accepts upstream values (`healthy` / `unhealthy`).
+        """
+        params = {
+            k: v
+            for k, v in {
+                "model": model,
+                "status_filter": status_filter,
+                "limit": limit,
+                "offset": offset,
+            }.items()
+            if v is not None
+        }
+        return await self._request("GET", "/health/history", params=params or None)
+
+    async def get_health_latest(self) -> dict:
+        """Latest health check snapshot (`GET /health/latest`)."""
+        return await self._request("GET", "/health/latest")
+
+    async def test_model_connection(
+        self,
+        litellm_params: dict,
+        mode: Optional[str] = None,
+        model_info: Optional[dict] = None,
+    ) -> dict:
+        """Test a candidate deployment connection (`POST /health/test_connection`).
+
+        `litellm_params` is the provider routing dict (same shape as `add_model`).
+        `mode` is the upstream test mode (e.g. `chat`, `embedding`, `completion`).
+        `model_info` is optional deployment metadata for the probe.
+        """
+        body: dict[str, Any] = {"litellm_params": litellm_params}
+        if mode is not None:
+            body["mode"] = mode
+        if model_info is not None:
+            body["model_info"] = model_info
+        return await self._request("POST", "/health/test_connection", json=body)

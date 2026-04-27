@@ -6,10 +6,12 @@ MCP server for [LiteLLM](https://github.com/BerriAI/litellm) proxy administratio
 
 Foundation (US #534) shipped `list_models`. Admin slice (US #535) added 32 tools
 covering models, model hub, model access groups, credentials, and virtual keys.
-Identity slice (US #536) adds 31 tools covering internal users, customers,
+Identity slice (US #536) added 31 tools covering internal users, customers,
 organizations (with member management), projects, and unified user access
-groups. Subsequent slices add spend/execution (#536b), governance and
-passthrough (#538), and the MCP-of-MCPs gateway (#558).
+groups. Spend/execution/health slice (US #596) adds 19 tools covering budgets,
+spend reporting, the three core execution verbs (chat / completion / embed),
+and admin health probes. Subsequent slices add governance and passthrough
+(#538) and the MCP-of-MCPs gateway (#558).
 
 ## Setup
 
@@ -198,6 +200,52 @@ groups gate users/teams against models, MCP servers, and agents in one shape.
 `create_organization`, `update_organization`, `create_project`, and
 `update_project` accept an `extras: dict` argument for the long tail of
 upstream fields not surfaced as named args.
+
+### Budgets (6)
+
+| Tool | Endpoint |
+|------|----------|
+| `list_budgets` | `GET /budget/list` |
+| `get_budget_info` | `POST /budget/info` (batch lookup by id list) |
+| `create_budget` | `POST /budget/new` |
+| `update_budget` | `POST /budget/update` |
+| `delete_budget` | `POST /budget/delete` |
+| `get_budget_settings` | `GET /budget/settings` |
+
+`create_budget` and `update_budget` accept an `extras: dict` for any
+`BudgetNewRequest` field not surfaced as a named arg.
+
+### Spend (5)
+
+| Tool | Endpoint |
+|------|----------|
+| `get_global_spend_report` | `GET /global/spend/report` (LiteLLM Enterprise only) |
+| `list_spend_logs` | `GET /spend/logs` |
+| `list_spend_tags` | `GET /spend/tags` |
+| `calculate_spend` | `POST /spend/calculate` (prospective or retrospective) |
+| `get_user_daily_activity` | `GET /user/daily/activity` |
+
+### Execution (3)
+
+| Tool | Endpoint |
+|------|----------|
+| `chat_completion` | `POST /v1/chat/completions` |
+| `completion` | `POST /v1/completions` (legacy text) |
+| `embed` | `POST /v1/embeddings` |
+
+Synchronous only — `stream` is stripped from the body. Pass any extra
+OpenAI/LiteLLM body fields (temperature, max_tokens, tools, dimensions, etc.)
+via the `body: dict` argument.
+
+### Health (5)
+
+| Tool | Endpoint |
+|------|----------|
+| `check_health` | `GET /health` (probes router-registered deployments) |
+| `check_health_backlog` | `GET /health/backlog` |
+| `get_health_history` | `GET /health/history` |
+| `get_health_latest` | `GET /health/latest` |
+| `test_model_connection` | `POST /health/test_connection` |
 
 ## Development
 
