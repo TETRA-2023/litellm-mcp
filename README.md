@@ -4,20 +4,19 @@ MCP server for [LiteLLM](https://github.com/BerriAI/litellm) proxy administratio
 
 **Upstream API reference:** [LiteLLM proxy Swagger](https://litellm-api.up.railway.app/).
 
-Foundation (US #534) shipped `list_models`. Admin slice (US #535) added 32 tools
+The initial release shipped `list_models`. The admin slice added 32 tools
 covering models, model hub, model access groups, credentials, and virtual keys.
-Identity slice (US #536) added 31 tools covering internal users, customers,
+The identity slice added 31 tools covering internal users, customers,
 organizations (with member management), projects, and unified user access
-groups. Spend/execution/health slice (US #596) added 19 tools covering budgets,
+groups. The spend / execution / health slice added 19 tools covering budgets,
 spend reporting, the three core execution verbs (chat / completion / embed),
-and admin health probes. MCP-Gateway slice (US #558) added 25 tools that let
+and admin health probes. The MCP-Gateway slice added 25 tools that let
 the LiteLLM proxy act as an MCP-of-MCPs: register upstream HTTP-transport MCP
-servers and list / invoke their tools through the proxy. MCP-Toolsets slice
-(US #688) added 5 tools to manage named bundles of cross-server tools.
-Passthrough slice (US #698) adds one generic `passthrough` tool that proxies
-to any of LiteLLM's 15+ provider native APIs (~85 Swagger ops in one tool).
-Remaining deferred work in #538 covers governance, multi-modal, and the
-non-passthrough operations of the deferable index.
+servers and list / invoke their tools through the proxy. The MCP-Toolsets slice
+added 5 tools to manage named bundles of cross-server tools. The passthrough
+slice adds one generic `passthrough` tool that proxies to any of LiteLLM's
+15+ provider native APIs (~85 Swagger ops in one tool). Remaining deferred work
+covers governance, multi-modal, and other less-frequently-used operations.
 
 ## Setup
 
