@@ -1971,3 +1971,62 @@ class LiteLLMClient:
         bouncing through an external service.
         """
         return await self._request("GET", "/v1/mcp/network/client-ip")
+
+    # ── MCP Toolset operations ──
+    #
+    # Toolsets are named bundles of tools sourced from one or more registered
+    # MCP servers (e.g. a `research` toolset combining `resolve-library-id`
+    # from Context7 with `search` from another upstream). The proxy then
+    # exposes each toolset as a brokered MCP endpoint at `/toolset/{name}/mcp`
+    # — that transport route is permanent-skip (transport-level, not admin).
+
+    async def list_mcp_toolsets(self) -> Any:
+        """List defined MCP toolsets (`GET /v1/mcp/toolset`)."""
+        return await self._request("GET", "/v1/mcp/toolset")
+
+    async def get_mcp_toolset(self, toolset_id: str) -> dict:
+        """Get a single MCP toolset by id (`GET /v1/mcp/toolset/{toolset_id}`)."""
+        return await self._request("GET", f"/v1/mcp/toolset/{toolset_id}")
+
+    async def add_mcp_toolset(
+        self,
+        toolset_name: str,
+        tools: list[str],
+        description: Optional[str] = None,
+    ) -> dict:
+        """Create an MCP toolset (`POST /v1/mcp/toolset`).
+
+        Body shape per `NewMCPToolsetRequest`: `toolset_name` (required),
+        `tools` (required list of tool identifiers — typically
+        `<server_alias>/<tool_name>` strings), optional `description`.
+        """
+        body: dict[str, Any] = {"toolset_name": toolset_name, "tools": tools}
+        if description is not None:
+            body["description"] = description
+        return await self._request("POST", "/v1/mcp/toolset", json=body)
+
+    async def update_mcp_toolset(
+        self,
+        toolset_id: str,
+        toolset_name: Optional[str] = None,
+        description: Optional[str] = None,
+        tools: Optional[list[str]] = None,
+    ) -> dict:
+        """Update an MCP toolset (`PUT /v1/mcp/toolset`).
+
+        Like `update_mcp_server`, the id goes in the body (per
+        `UpdateMCPToolsetRequest`), not the path. Only provided fields are sent.
+        """
+        body = self._build_body(
+            {
+                "toolset_id": toolset_id,
+                "toolset_name": toolset_name,
+                "description": description,
+                "tools": tools,
+            }
+        )
+        return await self._request("PUT", "/v1/mcp/toolset", json=body)
+
+    async def delete_mcp_toolset(self, toolset_id: str) -> dict:
+        """Delete an MCP toolset (`DELETE /v1/mcp/toolset/{toolset_id}`)."""
+        return await self._request("DELETE", f"/v1/mcp/toolset/{toolset_id}")

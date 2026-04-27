@@ -10,10 +10,11 @@ Identity slice (US #536) added 31 tools covering internal users, customers,
 organizations (with member management), projects, and unified user access
 groups. Spend/execution/health slice (US #596) added 19 tools covering budgets,
 spend reporting, the three core execution verbs (chat / completion / embed),
-and admin health probes. MCP-Gateway slice (US #558) adds 25 tools that let
+and admin health probes. MCP-Gateway slice (US #558) added 25 tools that let
 the LiteLLM proxy act as an MCP-of-MCPs: register upstream HTTP-transport MCP
-servers and list / invoke their tools through the proxy. Governance and
-passthrough (#538) is the remaining deferred slice.
+servers and list / invoke their tools through the proxy. MCP-Toolsets slice
+(US #688) adds 5 tools to manage named bundles of cross-server tools.
+Governance and passthrough (#538) is the remaining deferred slice.
 
 ## Setup
 
@@ -302,6 +303,18 @@ via the `body: dict` argument.
 | `get_mcp_client_ip` | `GET /v1/mcp/network/client-ip` |
 
 The `oauth: bool` discriminator on `set_mcp_user_credential` and `delete_mcp_user_credential` compresses the OAuth + non-OAuth endpoints into one tool each. Non-OAuth body: `{"credential": ..., "save": ...}`. OAuth body: `{"access_token": ..., "refresh_token": ..., "expires_in": ..., "scopes": [...]}`.
+
+### MCP Gateway — Toolsets (5)
+
+| Tool | Endpoint |
+|------|----------|
+| `list_mcp_toolsets` | `GET /v1/mcp/toolset` |
+| `get_mcp_toolset` | `GET /v1/mcp/toolset/{toolset_id}` |
+| `add_mcp_toolset` | `POST /v1/mcp/toolset` |
+| `update_mcp_toolset` | `PUT /v1/mcp/toolset` (toolset_id in body) |
+| `delete_mcp_toolset` | `DELETE /v1/mcp/toolset/{toolset_id}` |
+
+Toolsets are named bundles of tools sourced from one or more registered MCP servers (e.g. a `research` toolset combining `resolve-library-id` from Context7 with `search` from another MCP). Once defined, the proxy exposes each toolset as a brokered MCP endpoint at `/toolset/{name}/mcp` — that transport route is intentionally not wrapped here.
 
 `add_mcp_server` / `update_mcp_server` / `register_mcp_server` / `test_mcp_connection` accept an `extras: dict` argument for the long tail of `NewMCPServerRequest` fields not surfaced as named args (~20 less common fields like `static_headers`, `oauth2_flow`, `tool_name_to_display_name`, `allow_all_keys`).
 
