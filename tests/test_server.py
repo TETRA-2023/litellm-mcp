@@ -248,6 +248,14 @@ class TestUpdateModelAccessGroup:
         )
 
 
+class TestDeleteModelAccessGroup:
+    @pytest.mark.asyncio
+    async def test_passes_access_group(self, mock_client):
+        mock_client.delete_model_access_group.return_value = {"deleted": True}
+        await src.server.delete_model_access_group("engineering")
+        mock_client.delete_model_access_group.assert_awaited_once_with("engineering")
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

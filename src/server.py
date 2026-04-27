@@ -277,6 +277,12 @@ async def update_model_access_group(
 
 
 @mcp.tool()
+async def delete_model_access_group(access_group: str) -> dict:
+    """Delete a model access group by name (`DELETE /access_group/{access_group}/delete`)."""
+    return await get_client().delete_model_access_group(access_group)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

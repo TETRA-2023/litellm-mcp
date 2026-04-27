@@ -268,3 +268,7 @@ class LiteLLMClient:
         if model_ids is not None:
             body["model_ids"] = model_ids
         return await self._request("PUT", f"/access_group/{access_group}/update", json=body)
+
+    async def delete_model_access_group(self, access_group: str) -> dict:
+        """Delete a model access group by name (`DELETE /access_group/{access_group}/delete`)."""
+        return await self._request("DELETE", f"/access_group/{access_group}/delete")
