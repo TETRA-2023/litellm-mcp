@@ -70,6 +70,13 @@ async def run() -> int:
         print("LITELLM_API_KEY is not set", file=sys.stderr)
         return 1
 
+    # Optional model selectors for the execution-path probes. If unset the
+    # corresponding step is skipped — the proxy's available model_name aliases
+    # are deployment-specific, so the smoke can't assume any of them exist.
+    smoke_chat_model = os.environ.get("SMOKE_CHAT_MODEL")
+    smoke_embed_model = os.environ.get("SMOKE_EMBED_MODEL")
+    smoke_health_model = os.environ.get("SMOKE_HEALTH_MODEL")
+
     client = LiteLLMClient(
         base_url=settings.proxy_url,
         api_key=settings.get_api_key_value(),
@@ -345,74 +352,93 @@ async def run() -> int:
                 ),
             )
         )
-        results.append(
-            await _step(
-                "calculate_spend",
-                client.calculate_spend(
-                    model="tora-no-think",
-                    messages=[{"role": "user", "content": "hi"}],
-                ),
+        # calculate_spend needs a real model_name to look up cost — only run
+        # if the operator told us which alias exists on their proxy.
+        if smoke_chat_model:
+            results.append(
+                await _step(
+                    "calculate_spend",
+                    client.calculate_spend(
+                        model=smoke_chat_model,
+                        messages=[{"role": "user", "content": "hi"}],
+                    ),
+                )
             )
-        )
+        else:
+            results.append(("calculate_spend", True, "skipped (set SMOKE_CHAT_MODEL)"))
 
         # Health family (4 read ops, test_connection skipped — write-shaped)
         results.append(await _step("check_health_backlog", client.check_health_backlog()))
         results.append(await _step("get_health_latest", client.get_health_latest()))
         results.append(await _step("get_health_history", client.get_health_history(limit=5)))
         # /health probes every router-registered deployment — can take 30+s.
-        # Narrow to a single small local model.
-        results.append(await _step("check_health", client.check_health(model="tora-no-think")))
+        # Narrow to a single model when SMOKE_HEALTH_MODEL is provided.
+        target = smoke_health_model or smoke_chat_model
+        if target:
+            results.append(await _step("check_health", client.check_health(model=target)))
+        else:
+            results.append(
+                ("check_health", True, "skipped (set SMOKE_HEALTH_MODEL or SMOKE_CHAT_MODEL)")
+            )
 
         # Execution family (3 paths) — these spend real (small) tokens against
-        # local vLLM deployments. Skip via SMOKE_SKIP_EXEC=1 if needed.
+        # whichever models the operator points us at. Skip via SMOKE_SKIP_EXEC=1
+        # or by leaving SMOKE_CHAT_MODEL / SMOKE_EMBED_MODEL unset.
         if os.environ.get("SMOKE_SKIP_EXEC"):
             results.append(("chat_completion", True, "skipped (SMOKE_SKIP_EXEC)"))
             results.append(("completion", True, "skipped (SMOKE_SKIP_EXEC)"))
             results.append(("embed", True, "skipped (SMOKE_SKIP_EXEC)"))
         else:
-            try:
-                cc = await client.chat_completion(
-                    model="tora-no-think",
-                    messages=[{"role": "user", "content": "Reply with: ok"}],
-                    body={"max_tokens": 5, "temperature": 0.0},
-                )
-                results.append(("chat_completion", True, _summarize(cc)))
-            except LiteLLMAPIError as e:
-                results.append(("chat_completion", False, f"APIError {e.status_code}: {e}"))
-
-            # Legacy /v1/completions: many chat-only models 400 here. Mark
-            # 400/404/422 as "expected" since no legacy-text deployment exists.
-            try:
-                comp = await client.completion(
-                    model="tora-no-think",
-                    prompt="The capital of France is",
-                    body={"max_tokens": 3, "temperature": 0.0},
-                )
-                results.append(("completion", True, _summarize(comp)))
-            except LiteLLMAPIError as e:
-                if e.status_code in {400, 404, 422}:
-                    results.append(
-                        ("completion", True, f"{e.status_code} (no legacy-text deployment)")
+            if smoke_chat_model:
+                try:
+                    cc = await client.chat_completion(
+                        model=smoke_chat_model,
+                        messages=[{"role": "user", "content": "Reply with: ok"}],
+                        body={"max_tokens": 5, "temperature": 0.0},
                     )
-                else:
-                    results.append(("completion", False, f"APIError {e.status_code}: {e}"))
+                    results.append(("chat_completion", True, _summarize(cc)))
+                except LiteLLMAPIError as e:
+                    results.append(("chat_completion", False, f"APIError {e.status_code}: {e}"))
 
-            try:
-                emb = await client.embed(
-                    model="qwen/qwen3-embedding-0.6b",
-                    input=["smoke test"],
-                )
-                results.append(("embed", True, _summarize(emb)))
-            except LiteLLMAPIError as e:
-                results.append(("embed", False, f"APIError {e.status_code}: {e}"))
+                # Legacy /v1/completions: many chat-only models 400 here. Mark
+                # 400/404/422 as expected when no legacy-text deployment exists.
+                try:
+                    comp = await client.completion(
+                        model=smoke_chat_model,
+                        prompt="The capital of France is",
+                        body={"max_tokens": 3, "temperature": 0.0},
+                    )
+                    results.append(("completion", True, _summarize(comp)))
+                except LiteLLMAPIError as e:
+                    if e.status_code in {400, 404, 422}:
+                        results.append(
+                            ("completion", True, f"{e.status_code} (no legacy-text deployment)")
+                        )
+                    else:
+                        results.append(("completion", False, f"APIError {e.status_code}: {e}"))
+            else:
+                results.append(("chat_completion", True, "skipped (set SMOKE_CHAT_MODEL)"))
+                results.append(("completion", True, "skipped (set SMOKE_CHAT_MODEL)"))
+
+            if smoke_embed_model:
+                try:
+                    emb = await client.embed(
+                        model=smoke_embed_model,
+                        input=["smoke test"],
+                    )
+                    results.append(("embed", True, _summarize(emb)))
+                except LiteLLMAPIError as e:
+                    results.append(("embed", False, f"APIError {e.status_code}: {e}"))
+            else:
+                results.append(("embed", True, "skipped (set SMOKE_EMBED_MODEL)"))
 
         # MCP Gateway family — read-only paths + Context7 end-to-end.
         servers = await client.list_mcp_servers()
         results.append(("list_mcp_servers", True, _summarize(servers)))
 
         # Locate Context7 (or any registered HTTP-transport server) for the
-        # end-to-end probe. We don't auto-register because TETRA's proxy
-        # already has Context7 registered; double-registration would 409.
+        # end-to-end probe. We don't auto-register — if the proxy already has
+        # Context7 registered, double-registration would 409.
         first_server_id = None
         first_server_alias = None
         if isinstance(servers, list):
@@ -513,7 +539,8 @@ async def run() -> int:
             else:
                 results.append(("passthrough[anthropic]", False, f"APIError {e.status_code}: {e}"))
 
-        # MCP toolsets (read-only — empty on TETRA, create-flow stays in unit tests)
+        # MCP toolsets (read-only — toolsets may be empty on the proxy under
+        # test; create-flow stays in unit tests).
         toolsets = await client.list_mcp_toolsets()
         results.append(("list_mcp_toolsets", True, _summarize(toolsets)))
         first_toolset_id = None

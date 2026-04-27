@@ -1174,8 +1174,8 @@ class LiteLLMClient:
 
     # ── Unified User Access Group operations ──
     #
-    # Wraps `/v1/unified_access_group/*`. Distinct from model-access-groups
-    # (`/access_group/*`, in #535) — unified access groups gate users/teams
+    # Wraps `/v1/unified_access_group/*`. Distinct from the model-access-group
+    # family (`/access_group/*`) — unified access groups gate users/teams
     # against models, MCP servers, and agents in one shape.
 
     async def list_user_access_groups(self) -> Any:
@@ -1668,11 +1668,10 @@ class LiteLLMClient:
         """Admin-register a new upstream MCP server (`POST /v1/mcp/server`).
 
         `transport` is required (`http`, `sse`, `stdio`). For HTTP/SSE provide
-        `url`; for stdio you'd use upstream `command` / `args` / `env` fields
-        via `extras` (TETRA's gateway brokers HTTP-transport upstreams). Pass
-        any of the ~30 NewMCPServerRequest fields not surfaced as named args
-        through `extras` (e.g. `static_headers`, `extra_headers`,
-        `tool_name_to_display_name`, `oauth2_flow`).
+        `url`; for stdio supply upstream `command` / `args` / `env` fields
+        via `extras`. Pass any of the ~30 NewMCPServerRequest fields not
+        surfaced as named args through `extras` (e.g. `static_headers`,
+        `extra_headers`, `tool_name_to_display_name`, `oauth2_flow`).
         """
         body = self._build_mcp_server_body(
             server_id,
@@ -1884,8 +1883,8 @@ class LiteLLMClient:
     async def list_mcp_access_groups(self) -> Any:
         """List MCP access groups (`GET /v1/mcp/access_groups`).
 
-        Distinct from model access groups (`/access_group/list`, in #535) and
-        unified user access groups (`/v1/unified_access_group`, in #536) — these
+        Distinct from model access groups (`/access_group/list`) and
+        unified user access groups (`/v1/unified_access_group`) — these
         gate keys/teams against MCP servers specifically.
         """
         return await self._request("GET", "/v1/mcp/access_groups")

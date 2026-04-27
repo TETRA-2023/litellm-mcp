@@ -157,7 +157,7 @@ class TestListPublicModels:
 class TestGetPublicHubInfo:
     @pytest.mark.asyncio
     async def test_passthrough(self, mock_client):
-        payload = {"title": "Tetra Models", "description": "...", "useful_links": {}}
+        payload = {"title": "Test Hub", "description": "...", "useful_links": {}}
         mock_client.get_public_hub_info.return_value = payload
         result = await src.server.get_public_hub_info()
         assert result == payload

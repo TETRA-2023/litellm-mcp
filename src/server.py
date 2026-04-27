@@ -1463,8 +1463,8 @@ async def delete_project(project_ids: list[str]) -> dict:
 async def list_user_access_groups(verbosity: str = "standard") -> Any:
     """List unified user access groups (`GET /v1/unified_access_group`).
 
-    Distinct from `list_model_access_groups` (in #535) — unified access groups
-    gate users/teams against models, MCP servers, and agents in one shape.
+    Distinct from `list_model_access_groups` — unified access groups gate
+    users/teams against models, MCP servers, and agents in one shape.
 
     Args:
         verbosity: 'minimal' / 'standard' / 'full'.
@@ -2204,9 +2204,8 @@ async def get_mcp_registry() -> Any:
 async def list_mcp_access_groups() -> Any:
     """List MCP access groups (`GET /v1/mcp/access_groups`).
 
-    Distinct from the model-access-groups family (#535) and the unified user
-    access groups (#536) — these gate keys/teams against MCP servers
-    specifically.
+    Distinct from the model-access-groups family and the unified user
+    access groups — these gate keys/teams against MCP servers specifically.
     """
     return await get_client().list_mcp_access_groups()
 
