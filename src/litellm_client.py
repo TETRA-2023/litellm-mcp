@@ -332,3 +332,7 @@ class LiteLLMClient:
         return await self._request(
             "PATCH", f"/credentials/{credential_name}", json=body
         )
+
+    async def delete_credential(self, credential_name: str) -> dict:
+        """Delete a credential (`DELETE /credentials/{credential_name}`)."""
+        return await self._request("DELETE", f"/credentials/{credential_name}")

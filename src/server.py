@@ -360,6 +360,12 @@ async def update_credential(
 
 
 @mcp.tool()
+async def delete_credential(credential_name: str) -> dict:
+    """Delete a credential (`DELETE /credentials/{credential_name}`)."""
+    return await get_client().delete_credential(credential_name)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

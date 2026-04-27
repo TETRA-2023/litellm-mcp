@@ -333,6 +333,14 @@ class TestUpdateCredential:
         )
 
 
+class TestDeleteCredential:
+    @pytest.mark.asyncio
+    async def test_passes_credential_name(self, mock_client):
+        mock_client.delete_credential.return_value = {"deleted": True}
+        await src.server.delete_credential("openai-prod")
+        mock_client.delete_credential.assert_awaited_once_with("openai-prod")
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client
