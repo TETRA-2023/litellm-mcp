@@ -282,3 +282,7 @@ class LiteLLMClient:
         included — use `get_credential` for details.
         """
         return await self._request("GET", "/credentials")
+
+    async def get_credential(self, credential_name: str) -> dict:
+        """Get a credential by name (`GET /credentials/by_name/{credential_name}`)."""
+        return await self._request("GET", f"/credentials/by_name/{credential_name}")

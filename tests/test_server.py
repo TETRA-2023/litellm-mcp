@@ -266,6 +266,18 @@ class TestListCredentials:
         mock_client.list_credentials.assert_awaited_once()
 
 
+class TestGetCredential:
+    @pytest.mark.asyncio
+    async def test_passes_credential_name(self, mock_client):
+        mock_client.get_credential.return_value = {
+            "credential_name": "openai-prod",
+            "credential_info": {},
+        }
+        result = await src.server.get_credential("openai-prod", "full")
+        assert result["credential_name"] == "openai-prod"
+        mock_client.get_credential.assert_awaited_once_with("openai-prod")
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client
