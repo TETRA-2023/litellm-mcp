@@ -341,6 +341,25 @@ class TestDeleteCredential:
         mock_client.delete_credential.assert_awaited_once_with("openai-prod")
 
 
+class TestListKeys:
+    @pytest.mark.asyncio
+    async def test_no_filters(self, mock_client):
+        mock_client.list_keys.return_value = {"keys": [], "total_count": 0}
+        result = await src.server.list_keys()
+        assert result == {"keys": [], "total_count": 0}
+        mock_client.list_keys.assert_awaited_once_with(
+            None, None, None, None, None, None, None, None, None, None
+        )
+
+    @pytest.mark.asyncio
+    async def test_filter_by_team(self, mock_client):
+        mock_client.list_keys.return_value = {"keys": [{"key_name": "sk-x"}]}
+        await src.server.list_keys(team_id="t-1", page=2)
+        mock_client.list_keys.assert_awaited_once_with(
+            2, None, None, "t-1", None, None, None, None, None, None
+        )
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

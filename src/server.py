@@ -366,6 +366,38 @@ async def delete_credential(credential_name: str) -> dict:
 
 
 @mcp.tool()
+async def list_keys(
+    page: Optional[int] = None,
+    size: Optional[int] = None,
+    user_id: Optional[str] = None,
+    team_id: Optional[str] = None,
+    organization_id: Optional[str] = None,
+    key_alias: Optional[str] = None,
+    return_full_object: Optional[bool] = None,
+    include_team_keys: Optional[bool] = None,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = None,
+    verbosity: str = "standard",
+) -> dict:
+    """List virtual keys (`GET /key/list`).
+
+    All filter args are optional. The response is the full paginated object;
+    only `keys` items are filtered by verbosity if it's a list.
+
+    Args:
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().list_keys(
+        page, size, user_id, team_id, organization_id, key_alias,
+        return_full_object, include_team_keys, sort_by, sort_order,
+    )
+    if isinstance(payload, dict) and "keys" in payload:
+        payload = dict(payload)
+        payload["keys"] = _filter_response(payload["keys"], "key", verbosity)
+    return payload
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

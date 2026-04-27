@@ -336,3 +336,40 @@ class LiteLLMClient:
     async def delete_credential(self, credential_name: str) -> dict:
         """Delete a credential (`DELETE /credentials/{credential_name}`)."""
         return await self._request("DELETE", f"/credentials/{credential_name}")
+
+    # ── Key operations ──
+
+    async def list_keys(
+        self,
+        page: Optional[int] = None,
+        size: Optional[int] = None,
+        user_id: Optional[str] = None,
+        team_id: Optional[str] = None,
+        organization_id: Optional[str] = None,
+        key_alias: Optional[str] = None,
+        return_full_object: Optional[bool] = None,
+        include_team_keys: Optional[bool] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> dict:
+        """List virtual keys (`GET /key/list`).
+
+        Returns a paginated payload. All filter args are optional.
+        """
+        params = {
+            k: v
+            for k, v in {
+                "page": page,
+                "size": size,
+                "user_id": user_id,
+                "team_id": team_id,
+                "organization_id": organization_id,
+                "key_alias": key_alias,
+                "return_full_object": return_full_object,
+                "include_team_keys": include_team_keys,
+                "sort_by": sort_by,
+                "sort_order": sort_order,
+            }.items()
+            if v is not None
+        }
+        return await self._request("GET", "/key/list", params=params or None)
