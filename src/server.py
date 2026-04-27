@@ -160,6 +160,16 @@ async def update_model(
 
 
 @mcp.tool()
+async def delete_model(model_id: str) -> dict:
+    """Delete a model deployment (`POST /model/delete`).
+
+    Args:
+        model_id: deployment id (sent in body as `{"id": model_id}`).
+    """
+    return await get_client().delete_model(model_id)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

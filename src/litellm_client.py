@@ -183,3 +183,10 @@ class LiteLLMClient:
         if model_info is not None:
             body["model_info"] = model_info
         return await self._request("PATCH", f"/model/{model_id}/update", json=body)
+
+    async def delete_model(self, model_id: str) -> dict:
+        """Delete a model deployment (`POST /model/delete`).
+
+        Note: the deployment id goes in the body as `{"id": ...}`, not the path.
+        """
+        return await self._request("POST", "/model/delete", json={"id": model_id})

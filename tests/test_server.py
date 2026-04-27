@@ -135,6 +135,15 @@ class TestUpdateModel:
         )
 
 
+class TestDeleteModel:
+    @pytest.mark.asyncio
+    async def test_passes_model_id(self, mock_client):
+        mock_client.delete_model.return_value = {"deleted": True}
+        result = await src.server.delete_model("abc-123")
+        assert result == {"deleted": True}
+        mock_client.delete_model.assert_awaited_once_with("abc-123")
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client
