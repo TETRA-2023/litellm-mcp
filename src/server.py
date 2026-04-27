@@ -2386,6 +2386,49 @@ async def delete_mcp_toolset(toolset_id: str) -> dict:
     return await get_client().delete_mcp_toolset(toolset_id)
 
 
+# ── Provider passthrough ──
+
+
+@mcp.tool()
+async def passthrough(
+    provider: str,
+    endpoint: str,
+    method: str = "GET",
+    body: Optional[dict] = None,
+    params: Optional[dict] = None,
+    headers: Optional[dict] = None,
+) -> Any:
+    """Proxy a request to a provider's native API via LiteLLM (`<METHOD> /<provider>/<endpoint>`).
+
+    LiteLLM exposes 15+ providers' native APIs at `/<provider>/{endpoint:path}`
+    with all 5 HTTP methods (GET, POST, PUT, DELETE, PATCH). One generic tool
+    covers ~85 Swagger pass-through ops — wrapping each provider × method
+    individually would be busywork.
+
+    Known providers: `anthropic`, `openai`, `vertex_ai`, `vertex_ai/discovery`,
+    `gemini` (Google AI Studio), `cohere`, `vllm`, `mistral`, `milvus`,
+    `bedrock`, `assemblyai`, `eu.assemblyai`, `azure`, `azure_ai`, `cursor`,
+    `langfuse`. The list is fixed by what the running LiteLLM build compiles in.
+
+    Returns the upstream payload unmodified (no verbosity filtering — provider
+    responses are too varied to filter, and the value of pass-through is
+    byte-faithful access). Streaming responses are not supported in this slice.
+
+    Args:
+        provider: provider identifier — the path prefix after `/`.
+            Forward slashes inside the value are preserved
+            (e.g. `vertex_ai/discovery`).
+        endpoint: the rest of the upstream path, e.g. `v1/models`,
+            `v1/messages`, `v1/chat/completions`.
+        method: HTTP method, default `GET`. Case-insensitive.
+        body: optional JSON body for POST/PUT/PATCH.
+        params: optional query parameters.
+        headers: optional headers to forward (e.g. `{"anthropic-version": "..."}`).
+            Do not override `Authorization` — it's set by the client.
+    """
+    return await get_client().passthrough(provider, endpoint, method, body, params, headers)
+
+
 # ── Entrypoint ──
 
 
