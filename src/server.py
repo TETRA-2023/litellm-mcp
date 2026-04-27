@@ -231,6 +231,18 @@ async def list_model_access_groups(verbosity: str = "standard") -> Any:
 
 
 @mcp.tool()
+async def get_model_access_group(access_group: str, verbosity: str = "standard") -> dict:
+    """Get a single model access group by name (`GET /access_group/{access_group}/info`).
+
+    Args:
+        access_group: access group name (e.g. `engineering`).
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().get_model_access_group(access_group)
+    return _filter_response(payload, "access_group", verbosity)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

@@ -228,3 +228,7 @@ class LiteLLMClient:
     async def list_model_access_groups(self) -> Any:
         """List all model access groups (`GET /access_group/list`)."""
         return await self._request("GET", "/access_group/list")
+
+    async def get_model_access_group(self, access_group: str) -> dict:
+        """Get a single model access group by name (`GET /access_group/{access_group}/info`)."""
+        return await self._request("GET", f"/access_group/{access_group}/info")
