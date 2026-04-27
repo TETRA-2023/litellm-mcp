@@ -1549,6 +1549,96 @@ class TestGetMCPClientIp:
         assert result == {"client_ip": "10.0.0.1"}
 
 
+# ── MCP Toolset tools ──
+
+
+class TestListMCPToolsets:
+    @pytest.mark.asyncio
+    async def test_filters_to_toolset_shape(self, mock_client):
+        mock_client.list_mcp_toolsets.return_value = [
+            {
+                "toolset_id": "ts-1",
+                "toolset_name": "research",
+                "description": "...",
+                "tools": ["context7/resolve-library-id"],
+                "drop_me": True,
+            }
+        ]
+        result = await src.server.list_mcp_toolsets("standard")
+        assert "drop_me" not in result[0]
+        assert result[0]["toolset_name"] == "research"
+
+    @pytest.mark.asyncio
+    async def test_minimal(self, mock_client):
+        mock_client.list_mcp_toolsets.return_value = [
+            {"toolset_id": "ts-1", "toolset_name": "research", "tools": []}
+        ]
+        result = await src.server.list_mcp_toolsets("minimal")
+        assert result == [{"toolset_id": "ts-1", "toolset_name": "research"}]
+
+
+class TestGetMCPToolset:
+    @pytest.mark.asyncio
+    async def test_passes_id(self, mock_client):
+        mock_client.get_mcp_toolset.return_value = {
+            "toolset_id": "ts-1",
+            "toolset_name": "research",
+        }
+        result = await src.server.get_mcp_toolset("ts-1", "standard")
+        assert result["toolset_name"] == "research"
+        mock_client.get_mcp_toolset.assert_awaited_once_with("ts-1")
+
+
+class TestAddMCPToolset:
+    @pytest.mark.asyncio
+    async def test_required_fields(self, mock_client):
+        mock_client.add_mcp_toolset.return_value = {"toolset_id": "ts-1"}
+        await src.server.add_mcp_toolset(
+            toolset_name="research",
+            tools=["context7/resolve-library-id"],
+            description="docs lookup",
+        )
+        mock_client.add_mcp_toolset.assert_awaited_once_with(
+            "research", ["context7/resolve-library-id"], "docs lookup"
+        )
+
+    @pytest.mark.asyncio
+    async def test_no_description(self, mock_client):
+        mock_client.add_mcp_toolset.return_value = {"toolset_id": "ts-1"}
+        await src.server.add_mcp_toolset(
+            toolset_name="research", tools=["context7/resolve-library-id"]
+        )
+        mock_client.add_mcp_toolset.assert_awaited_once_with(
+            "research", ["context7/resolve-library-id"], None
+        )
+
+
+class TestUpdateMCPToolset:
+    @pytest.mark.asyncio
+    async def test_required_id(self, mock_client):
+        mock_client.update_mcp_toolset.return_value = {"ok": True}
+        await src.server.update_mcp_toolset("ts-1", description="updated")
+        mock_client.update_mcp_toolset.assert_awaited_once_with("ts-1", None, "updated", None)
+
+    @pytest.mark.asyncio
+    async def test_replace_tools(self, mock_client):
+        mock_client.update_mcp_toolset.return_value = {"ok": True}
+        await src.server.update_mcp_toolset(
+            "ts-1", tools=["context7/resolve-library-id", "context7/query-docs"]
+        )
+        mock_client.update_mcp_toolset.assert_awaited_once_with(
+            "ts-1", None, None, ["context7/resolve-library-id", "context7/query-docs"]
+        )
+
+
+class TestDeleteMCPToolset:
+    @pytest.mark.asyncio
+    async def test_passes_id(self, mock_client):
+        mock_client.delete_mcp_toolset.return_value = {"deleted": True}
+        await src.server.delete_mcp_toolset("ts-1")
+        mock_client.delete_mcp_toolset.assert_awaited_once_with("ts-1")
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client
