@@ -259,6 +259,24 @@ async def create_model_access_group(
 
 
 @mcp.tool()
+async def update_model_access_group(
+    access_group: str,
+    model_names: Optional[list[str]] = None,
+    model_ids: Optional[list[str]] = None,
+) -> dict:
+    """Update membership of a model access group (`PUT /access_group/{access_group}/update`).
+
+    Replaces (not appends) the current membership.
+
+    Args:
+        access_group: target access group name.
+        model_names: optional new list of model_name aliases.
+        model_ids: optional new list of deployment ids.
+    """
+    return await get_client().update_model_access_group(access_group, model_names, model_ids)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

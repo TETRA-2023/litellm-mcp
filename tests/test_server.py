@@ -236,6 +236,18 @@ class TestCreateModelAccessGroup:
         )
 
 
+class TestUpdateModelAccessGroup:
+    @pytest.mark.asyncio
+    async def test_replaces_models(self, mock_client):
+        mock_client.update_model_access_group.return_value = {"ok": True}
+        await src.server.update_model_access_group(
+            "engineering", model_names=["claude-opus-4-7"]
+        )
+        mock_client.update_model_access_group.assert_awaited_once_with(
+            "engineering", ["claude-opus-4-7"], None
+        )
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

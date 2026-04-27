@@ -250,3 +250,21 @@ class LiteLLMClient:
         if model_ids is not None:
             body["model_ids"] = model_ids
         return await self._request("POST", "/access_group/new", json=body)
+
+    async def update_model_access_group(
+        self,
+        access_group: str,
+        model_names: Optional[list[str]] = None,
+        model_ids: Optional[list[str]] = None,
+    ) -> dict:
+        """Update membership of a model access group (`PUT /access_group/{access_group}/update`).
+
+        Both fields are optional; only those passed will be sent. The upstream
+        endpoint replaces (not appends) membership.
+        """
+        body: dict[str, Any] = {}
+        if model_names is not None:
+            body["model_names"] = model_names
+        if model_ids is not None:
+            body["model_ids"] = model_ids
+        return await self._request("PUT", f"/access_group/{access_group}/update", json=body)
