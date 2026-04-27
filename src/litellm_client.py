@@ -132,6 +132,12 @@ class LiteLLMClient:
         """Get a single model entry from the OpenAI-compatible models endpoint.
 
         Calls `GET /v1/models/{model_id}`.
+
+        Note: LiteLLM only resolves `model_id` against router-registered
+        deployments here, *not* the union returned by `GET /v1/models`. Calling
+        with a passthrough id from `list_models()` will 404 — that's upstream
+        behavior, not a wrapper bug. Use `get_model_info()` for the admin-side
+        view that includes router deployments by their internal litellm id.
         """
         return await self._request("GET", f"/v1/models/{model_id}")
 
@@ -321,17 +327,19 @@ class LiteLLMClient:
     ) -> dict:
         """Update a credential (`PATCH /credentials/{credential_name}`).
 
-        The CredentialItem schema requires all three fields. Path id and body
-        `credential_name` should match.
+        Despite the PATCH verb, this is *not* a partial update — the upstream
+        `CredentialItem` schema requires all three fields. Callers must
+        re-send the full current state of `credential_info` and
+        `credential_values` (e.g. via `get_credential(..., verbosity='full')`),
+        not just the keys they want to change. Path id and body `credential_name`
+        should match.
         """
         body = {
             "credential_name": credential_name,
             "credential_info": credential_info,
             "credential_values": credential_values,
         }
-        return await self._request(
-            "PATCH", f"/credentials/{credential_name}", json=body
-        )
+        return await self._request("PATCH", f"/credentials/{credential_name}", json=body)
 
     async def delete_credential(self, credential_name: str) -> dict:
         """Delete a credential (`DELETE /credentials/{credential_name}`)."""
@@ -545,9 +553,7 @@ class LiteLLMClient:
             {"new_master_key": new_master_key, "duration": duration},
             extras,
         )
-        return await self._request(
-            "POST", f"/key/{key}/regenerate", json=body or None
-        )
+        return await self._request("POST", f"/key/{key}/regenerate", json=body or None)
 
     async def set_key_blocked(self, key: str, blocked: bool) -> dict:
         """Block or unblock a virtual key.
@@ -580,9 +586,7 @@ class LiteLLMClient:
         `reset_to` defaults to 0.0 (typical use); pass a positive value to set
         a starting balance.
         """
-        return await self._request(
-            "POST", f"/key/{key}/reset_spend", json={"reset_to": reset_to}
-        )
+        return await self._request("POST", f"/key/{key}/reset_spend", json={"reset_to": reset_to})
 
     async def key_health(self) -> dict:
         """Probe the health of the caller's key (`POST /key/health`).

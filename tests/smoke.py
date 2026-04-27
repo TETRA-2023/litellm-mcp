@@ -83,9 +83,7 @@ async def run() -> int:
         # Models family (3 read ops)
         models = await client.list_models()
         results.append(("list_models", True, _summarize(models)))
-        first_model_id = (
-            models[0]["id"] if isinstance(models, list) and models else None
-        )
+        first_model_id = models[0]["id"] if isinstance(models, list) and models else None
         if first_model_id:
             # Note: /v1/models lists router + passthrough models, but
             # /v1/models/{id} only resolves router-registered ids. 404 is
@@ -147,7 +145,9 @@ async def run() -> int:
                 if e.status_code == 404:
                     results.append(("get_credential_by_model", True, "404 (no bound cred)"))
                 else:
-                    results.append(("get_credential_by_model", False, f"APIError {e.status_code}: {e}"))
+                    results.append(
+                        ("get_credential_by_model", False, f"APIError {e.status_code}: {e}")
+                    )
         else:
             results.append(("get_credential_by_model", True, "skipped (no models)"))
 

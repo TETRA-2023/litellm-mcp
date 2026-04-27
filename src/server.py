@@ -152,6 +152,10 @@ async def list_models(verbosity: str = "standard") -> list[dict]:
 async def get_model(model_id: str, verbosity: str = "standard") -> dict:
     """Get a single model entry by id (`GET /v1/models/{model_id}`).
 
+    Note: this endpoint only resolves router-registered deployments. Passthrough
+    ids returned by `list_models()` will 404 — for admin-side info on router
+    deployments, use `get_model_info()` instead.
+
     Args:
         model_id: The OpenAI-style model id (e.g. `gpt-4o`).
         verbosity: 'minimal' / 'standard' / 'full'.
@@ -380,16 +384,17 @@ async def update_credential(
 ) -> dict:
     """Update a credential (`PATCH /credentials/{credential_name}`).
 
-    The upstream CredentialItem schema requires all three fields.
+    Despite the PATCH verb, the upstream CredentialItem schema requires all
+    three fields — this is a full replace, not a partial update. Fetch the
+    current state with `get_credential(..., verbosity='full')` first if you
+    only want to change one field.
 
     Args:
         credential_name: name of credential to update.
-        credential_info: full metadata dict.
-        credential_values: full credential values dict.
+        credential_info: full metadata dict (will replace existing).
+        credential_values: full credential values dict (will replace existing).
     """
-    return await get_client().update_credential(
-        credential_name, credential_info, credential_values
-    )
+    return await get_client().update_credential(credential_name, credential_info, credential_values)
 
 
 @mcp.tool()
@@ -421,8 +426,16 @@ async def list_keys(
         verbosity: 'minimal' / 'standard' / 'full'.
     """
     payload = await get_client().list_keys(
-        page, size, user_id, team_id, organization_id, key_alias,
-        return_full_object, include_team_keys, sort_by, sort_order,
+        page,
+        size,
+        user_id,
+        team_id,
+        organization_id,
+        key_alias,
+        return_full_object,
+        include_team_keys,
+        sort_by,
+        sort_order,
     )
     if isinstance(payload, dict) and "keys" in payload:
         payload = dict(payload)
@@ -493,9 +506,19 @@ async def generate_key(
         extras: any other GenerateKeyRequest field (merged last).
     """
     return await get_client().generate_key(
-        key_alias, duration, models, max_budget, budget_duration,
-        user_id, team_id, tpm_limit, rpm_limit, metadata, guardrails,
-        blocked, extras,
+        key_alias,
+        duration,
+        models,
+        max_budget,
+        budget_duration,
+        user_id,
+        team_id,
+        tpm_limit,
+        rpm_limit,
+        metadata,
+        guardrails,
+        blocked,
+        extras,
     )
 
 
@@ -521,9 +544,19 @@ async def generate_service_account_key(
     service account (no human user binding required).
     """
     return await get_client().generate_service_account_key(
-        key_alias, duration, models, max_budget, budget_duration,
-        user_id, team_id, tpm_limit, rpm_limit, metadata, guardrails,
-        blocked, extras,
+        key_alias,
+        duration,
+        models,
+        max_budget,
+        budget_duration,
+        user_id,
+        team_id,
+        tpm_limit,
+        rpm_limit,
+        metadata,
+        guardrails,
+        blocked,
+        extras,
     )
 
 
@@ -548,8 +581,18 @@ async def update_key(
     for less-common UpdateKeyRequest fields not surfaced as named args.
     """
     return await get_client().update_key(
-        key, key_alias, duration, models, max_budget, budget_duration,
-        tpm_limit, rpm_limit, metadata, guardrails, blocked, extras,
+        key,
+        key_alias,
+        duration,
+        models,
+        max_budget,
+        budget_duration,
+        tpm_limit,
+        rpm_limit,
+        metadata,
+        guardrails,
+        blocked,
+        extras,
     )
 
 

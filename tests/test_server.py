@@ -179,9 +179,7 @@ class TestMakeModelGroupPublic:
     async def test_passes_model_groups(self, mock_client):
         mock_client.make_model_group_public.return_value = {"ok": True}
         await src.server.make_model_group_public(["gpt-4o", "claude-opus-4-7"])
-        mock_client.make_model_group_public.assert_awaited_once_with(
-            ["gpt-4o", "claude-opus-4-7"]
-        )
+        mock_client.make_model_group_public.assert_awaited_once_with(["gpt-4o", "claude-opus-4-7"])
 
 
 class TestUpdateModelHubLinks:
@@ -189,9 +187,7 @@ class TestUpdateModelHubLinks:
     async def test_passes_links(self, mock_client):
         mock_client.update_model_hub_links.return_value = {"ok": True}
         await src.server.update_model_hub_links({"Docs": "https://example.com"})
-        mock_client.update_model_hub_links.assert_awaited_once_with(
-            {"Docs": "https://example.com"}
-        )
+        mock_client.update_model_hub_links.assert_awaited_once_with({"Docs": "https://example.com"})
 
 
 class TestListModelAccessGroups:
@@ -221,9 +217,7 @@ class TestCreateModelAccessGroup:
     async def test_minimum_required(self, mock_client):
         mock_client.create_model_access_group.return_value = {"ok": True}
         await src.server.create_model_access_group("engineering")
-        mock_client.create_model_access_group.assert_awaited_once_with(
-            "engineering", None, None
-        )
+        mock_client.create_model_access_group.assert_awaited_once_with("engineering", None, None)
 
     @pytest.mark.asyncio
     async def test_with_members(self, mock_client):
@@ -240,9 +234,7 @@ class TestUpdateModelAccessGroup:
     @pytest.mark.asyncio
     async def test_replaces_models(self, mock_client):
         mock_client.update_model_access_group.return_value = {"ok": True}
-        await src.server.update_model_access_group(
-            "engineering", model_names=["claude-opus-4-7"]
-        )
+        await src.server.update_model_access_group("engineering", model_names=["claude-opus-4-7"])
         mock_client.update_model_access_group.assert_awaited_once_with(
             "engineering", ["claude-opus-4-7"], None
         )
@@ -400,8 +392,19 @@ class TestGenerateKey:
             team_id="t-1",
         )
         mock_client.generate_key.assert_awaited_once_with(
-            "prod-bot", "30d", ["gpt-4o"], 10.0, None,
-            None, "t-1", None, None, None, None, None, None,
+            "prod-bot",
+            "30d",
+            ["gpt-4o"],
+            10.0,
+            None,
+            None,
+            "t-1",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
         )
 
     @pytest.mark.asyncio
@@ -424,8 +427,19 @@ class TestGenerateServiceAccountKey:
             key_alias="ci-bot", duration="365d", team_id="t-1"
         )
         mock_client.generate_service_account_key.assert_awaited_once_with(
-            "ci-bot", "365d", None, None, None,
-            None, "t-1", None, None, None, None, None, None,
+            "ci-bot",
+            "365d",
+            None,
+            None,
+            None,
+            None,
+            "t-1",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
         )
 
 
