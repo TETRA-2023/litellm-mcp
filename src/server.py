@@ -187,6 +187,16 @@ async def get_public_hub_info() -> dict:
 
 
 @mcp.tool()
+async def get_model_cost_map() -> dict:
+    """Get the LiteLLM static model cost / capability map (`GET /public/litellm_model_cost_map`).
+
+    Large response (~1MB). Useful for the admin agent to look up token pricing
+    and context windows without an outbound call.
+    """
+    return await get_client().get_model_cost_map()
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

@@ -164,6 +164,16 @@ class TestGetPublicHubInfo:
         mock_client.get_public_hub_info.assert_awaited_once()
 
 
+class TestGetModelCostMap:
+    @pytest.mark.asyncio
+    async def test_passthrough(self, mock_client):
+        payload = {"gpt-4o": {"input_cost_per_token": 1e-6}}
+        mock_client.get_model_cost_map.return_value = payload
+        result = await src.server.get_model_cost_map()
+        assert result == payload
+        mock_client.get_model_cost_map.assert_awaited_once()
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

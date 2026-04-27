@@ -200,3 +200,7 @@ class LiteLLMClient:
     async def get_public_hub_info(self) -> dict:
         """Get Model Hub metadata: title, description, useful links (`GET /public/model_hub/info`)."""
         return await self._request("GET", "/public/model_hub/info")
+
+    async def get_model_cost_map(self) -> dict:
+        """Get LiteLLM's static model cost / capability map (`GET /public/litellm_model_cost_map`)."""
+        return await self._request("GET", "/public/litellm_model_cost_map")
