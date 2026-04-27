@@ -429,6 +429,24 @@ class TestGenerateServiceAccountKey:
         )
 
 
+class TestUpdateKey:
+    @pytest.mark.asyncio
+    async def test_minimal(self, mock_client):
+        mock_client.update_key.return_value = {"key": "sk-x"}
+        await src.server.update_key("sk-x", max_budget=50.0)
+        mock_client.update_key.assert_awaited_once_with(
+            "sk-x", None, None, None, 50.0, None, None, None, None, None, None, None
+        )
+
+    @pytest.mark.asyncio
+    async def test_extras(self, mock_client):
+        mock_client.update_key.return_value = {"key": "sk-x"}
+        await src.server.update_key("sk-x", extras={"max_parallel_requests": 8})
+        call = mock_client.update_key.await_args
+        assert call.args[0] == "sk-x"
+        assert call.args[11] == {"max_parallel_requests": 8}
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

@@ -495,6 +495,32 @@ async def generate_service_account_key(
 
 
 @mcp.tool()
+async def update_key(
+    key: str,
+    key_alias: Optional[str] = None,
+    duration: Optional[str] = None,
+    models: Optional[list[str]] = None,
+    max_budget: Optional[float] = None,
+    budget_duration: Optional[str] = None,
+    tpm_limit: Optional[int] = None,
+    rpm_limit: Optional[int] = None,
+    metadata: Optional[dict] = None,
+    guardrails: Optional[list[str]] = None,
+    blocked: Optional[bool] = None,
+    extras: Optional[dict] = None,
+) -> dict:
+    """Update a virtual key (`POST /key/update`).
+
+    Only `key` is required. All other fields are merged sparsely. Use `extras`
+    for less-common UpdateKeyRequest fields not surfaced as named args.
+    """
+    return await get_client().update_key(
+        key, key_alias, duration, models, max_budget, budget_duration,
+        tpm_limit, rpm_limit, metadata, guardrails, blocked, extras,
+    )
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

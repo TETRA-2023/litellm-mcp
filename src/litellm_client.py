@@ -490,3 +490,40 @@ class LiteLLMClient:
             extras,
         )
         return await self._request("POST", "/key/service-account/generate", json=body)
+
+    async def update_key(
+        self,
+        key: str,
+        key_alias: Optional[str] = None,
+        duration: Optional[str] = None,
+        models: Optional[list[str]] = None,
+        max_budget: Optional[float] = None,
+        budget_duration: Optional[str] = None,
+        tpm_limit: Optional[int] = None,
+        rpm_limit: Optional[int] = None,
+        metadata: Optional[dict] = None,
+        guardrails: Optional[list[str]] = None,
+        blocked: Optional[bool] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Update a virtual key (`POST /key/update`).
+
+        Only `key` is required. All other fields are merged sparsely.
+        """
+        body = self._build_key_body(
+            {
+                "key": key,
+                "key_alias": key_alias,
+                "duration": duration,
+                "models": models,
+                "max_budget": max_budget,
+                "budget_duration": budget_duration,
+                "tpm_limit": tpm_limit,
+                "rpm_limit": rpm_limit,
+                "metadata": metadata,
+                "guardrails": guardrails,
+                "blocked": blocked,
+            },
+            extras,
+        )
+        return await self._request("POST", "/key/update", json=body)
