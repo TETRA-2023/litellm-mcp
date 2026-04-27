@@ -232,3 +232,21 @@ class LiteLLMClient:
     async def get_model_access_group(self, access_group: str) -> dict:
         """Get a single model access group by name (`GET /access_group/{access_group}/info`)."""
         return await self._request("GET", f"/access_group/{access_group}/info")
+
+    async def create_model_access_group(
+        self,
+        access_group: str,
+        model_names: Optional[list[str]] = None,
+        model_ids: Optional[list[str]] = None,
+    ) -> dict:
+        """Create a new model access group (`POST /access_group/new`).
+
+        Membership can be specified by `model_names` (model_name aliases) and/or
+        `model_ids` (deployment ids). Both default to None.
+        """
+        body: dict[str, Any] = {"access_group": access_group}
+        if model_names is not None:
+            body["model_names"] = model_names
+        if model_ids is not None:
+            body["model_ids"] = model_ids
+        return await self._request("POST", "/access_group/new", json=body)

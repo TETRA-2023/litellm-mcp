@@ -216,6 +216,26 @@ class TestGetModelAccessGroup:
         mock_client.get_model_access_group.assert_awaited_once_with("engineering")
 
 
+class TestCreateModelAccessGroup:
+    @pytest.mark.asyncio
+    async def test_minimum_required(self, mock_client):
+        mock_client.create_model_access_group.return_value = {"ok": True}
+        await src.server.create_model_access_group("engineering")
+        mock_client.create_model_access_group.assert_awaited_once_with(
+            "engineering", None, None
+        )
+
+    @pytest.mark.asyncio
+    async def test_with_members(self, mock_client):
+        mock_client.create_model_access_group.return_value = {"ok": True}
+        await src.server.create_model_access_group(
+            "engineering", model_names=["gpt-4o"], model_ids=["abc-123"]
+        )
+        mock_client.create_model_access_group.assert_awaited_once_with(
+            "engineering", ["gpt-4o"], ["abc-123"]
+        )
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

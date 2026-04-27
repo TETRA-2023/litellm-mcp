@@ -243,6 +243,22 @@ async def get_model_access_group(access_group: str, verbosity: str = "standard")
 
 
 @mcp.tool()
+async def create_model_access_group(
+    access_group: str,
+    model_names: Optional[list[str]] = None,
+    model_ids: Optional[list[str]] = None,
+) -> dict:
+    """Create a new model access group (`POST /access_group/new`).
+
+    Args:
+        access_group: name of the new group.
+        model_names: optional list of model_name aliases to include.
+        model_ids: optional list of deployment ids to include.
+    """
+    return await get_client().create_model_access_group(access_group, model_names, model_ids)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 
