@@ -424,6 +424,49 @@ async def get_key_info(key: Optional[str] = None, verbosity: str = "standard") -
 
 
 @mcp.tool()
+async def generate_key(
+    key_alias: Optional[str] = None,
+    duration: Optional[str] = None,
+    models: Optional[list[str]] = None,
+    max_budget: Optional[float] = None,
+    budget_duration: Optional[str] = None,
+    user_id: Optional[str] = None,
+    team_id: Optional[str] = None,
+    tpm_limit: Optional[int] = None,
+    rpm_limit: Optional[int] = None,
+    metadata: Optional[dict] = None,
+    guardrails: Optional[list[str]] = None,
+    blocked: Optional[bool] = None,
+    extras: Optional[dict] = None,
+) -> dict:
+    """Generate a new virtual key (`POST /key/generate`).
+
+    Common fields are explicit args. Use `extras` for the ~30 less-common
+    fields in the upstream `GenerateKeyRequest` (see Swagger).
+
+    Args:
+        key_alias: human-readable alias.
+        duration: TTL like `30d`, `1h`.
+        models: model_name allowlist (or empty for all).
+        max_budget: spend cap (USD).
+        budget_duration: budget reset window (`30d`).
+        user_id: bind to user.
+        team_id: bind to team.
+        tpm_limit: tokens-per-minute cap.
+        rpm_limit: requests-per-minute cap.
+        metadata: free-form metadata.
+        guardrails: guardrail names to enforce.
+        blocked: create as blocked.
+        extras: any other GenerateKeyRequest field (merged last).
+    """
+    return await get_client().generate_key(
+        key_alias, duration, models, max_budget, budget_duration,
+        user_id, team_id, tpm_limit, rpm_limit, metadata, guardrails,
+        blocked, extras,
+    )
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

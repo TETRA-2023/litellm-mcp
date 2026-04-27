@@ -382,6 +382,40 @@ class TestGetKeyInfo:
         mock_client.get_key_info.assert_awaited_once_with("sk-x")
 
 
+class TestGenerateKey:
+    @pytest.mark.asyncio
+    async def test_minimal(self, mock_client):
+        mock_client.generate_key.return_value = {"key": "sk-123", "key_name": "auto"}
+        result = await src.server.generate_key()
+        assert result["key"] == "sk-123"
+
+    @pytest.mark.asyncio
+    async def test_common_args(self, mock_client):
+        mock_client.generate_key.return_value = {"key": "sk-x"}
+        await src.server.generate_key(
+            key_alias="prod-bot",
+            duration="30d",
+            models=["gpt-4o"],
+            max_budget=10.0,
+            team_id="t-1",
+        )
+        mock_client.generate_key.assert_awaited_once_with(
+            "prod-bot", "30d", ["gpt-4o"], 10.0, None,
+            None, "t-1", None, None, None, None, None, None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_extras_merged(self, mock_client):
+        mock_client.generate_key.return_value = {"key": "sk-x"}
+        await src.server.generate_key(
+            key_alias="x",
+            extras={"agent_id": "a-1", "max_parallel_requests": 4},
+        )
+        call = mock_client.generate_key.await_args
+        assert call.args[0] == "x"
+        assert call.args[12] == {"agent_id": "a-1", "max_parallel_requests": 4}
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

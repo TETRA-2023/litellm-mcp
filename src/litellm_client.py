@@ -399,3 +399,54 @@ class LiteLLMClient:
         """
         params = {"key": key} if key else None
         return await self._request("GET", "/key/info", params=params)
+
+    @staticmethod
+    def _build_key_body(
+        common: dict[str, Any],
+        extras: Optional[dict],
+    ) -> dict[str, Any]:
+        """Build a key request body: drop None entries from common, merge extras."""
+        body = {k: v for k, v in common.items() if v is not None}
+        if extras:
+            body.update(extras)
+        return body
+
+    async def generate_key(
+        self,
+        key_alias: Optional[str] = None,
+        duration: Optional[str] = None,
+        models: Optional[list[str]] = None,
+        max_budget: Optional[float] = None,
+        budget_duration: Optional[str] = None,
+        user_id: Optional[str] = None,
+        team_id: Optional[str] = None,
+        tpm_limit: Optional[int] = None,
+        rpm_limit: Optional[int] = None,
+        metadata: Optional[dict] = None,
+        guardrails: Optional[list[str]] = None,
+        blocked: Optional[bool] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Generate a new virtual key (`POST /key/generate`).
+
+        All fields are optional. Use `extras` for the ~30 less common fields not
+        surfaced as explicit args (see GenerateKeyRequest in upstream Swagger).
+        """
+        body = self._build_key_body(
+            {
+                "key_alias": key_alias,
+                "duration": duration,
+                "models": models,
+                "max_budget": max_budget,
+                "budget_duration": budget_duration,
+                "user_id": user_id,
+                "team_id": team_id,
+                "tpm_limit": tpm_limit,
+                "rpm_limit": rpm_limit,
+                "metadata": metadata,
+                "guardrails": guardrails,
+                "blocked": blocked,
+            },
+            extras,
+        )
+        return await self._request("POST", "/key/generate", json=body)
