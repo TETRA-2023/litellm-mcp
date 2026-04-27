@@ -13,10 +13,16 @@ MCP server for the LiteLLM proxy. Python 3.12, fastmcp (`mcp.server.fastmcp`), h
 
 ## Conventions
 
-- All tools accept a `verbosity: str` argument (`minimal` / `standard` / `full`) and route through `_filter_response`.
-- Add new resource shapes to `RESPONSE_FIELDS` in `src/server.py`.
+- All read-shaped tools accept a `verbosity: str` argument (`minimal` / `standard` / `full`) and route through `_filter_response`. Write/admin tools generally don't filter (`update_model`, `add_model`, etc. return upstream as-is).
+- Add new resource shapes to `RESPONSE_FIELDS` in `src/server.py`. Current shapes: `model`, `access_group`, `credential`, `key`, `public_hub`. The `credential.standard` shape intentionally drops `credential_values` to avoid leaking secrets — use `full` to inspect.
 - New endpoints go on `LiteLLMClient` first, then a thin `@mcp.tool()` wrapper in `server.py`.
+- For body schemas with many optional fields (`GenerateKeyRequest`, `UpdateKeyRequest`, `RegenerateKeyRequest`), expose ~12 common fields as named args and accept the long tail through an `extras: Optional[dict]` argument (merged into the body via `_build_key_body`).
 - Keep transport agnostic: never call `print` / write to stdout in stdio mode.
+
+## Current scope (US #534 + #535)
+
+- **#534 (v1.0.0):** foundation, `list_models`.
+- **#535:** 32 admin tools — Models (5), Model Hub (5), Access Groups (5), Credentials (6), Keys (11). All wrapped with unit tests against `AsyncMock(LiteLLMClient)`.
 
 ## Testing
 
