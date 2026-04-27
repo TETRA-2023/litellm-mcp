@@ -286,6 +286,126 @@ async def run() -> int:
         else:
             results.append(("get_user_access_group", True, "skipped (no user access groups)"))
 
+        # Budget family (3 read ops — list, info-batch, settings)
+        budgets = await client.list_budgets()
+        results.append(("list_budgets", True, _summarize(budgets)))
+        first_budget_id = None
+        if isinstance(budgets, list) and budgets:
+            first_budget_id = budgets[0].get("budget_id") if isinstance(budgets[0], dict) else None
+        elif isinstance(budgets, dict):
+            data = budgets.get("data") or budgets.get("budgets") or []
+            if data:
+                first_budget_id = data[0].get("budget_id") if isinstance(data[0], dict) else None
+        if first_budget_id:
+            results.append(
+                await _step("get_budget_info", client.get_budget_info([first_budget_id]))
+            )
+            try:
+                payload = await client.get_budget_settings(first_budget_id)
+                results.append(("get_budget_settings", True, _summarize(payload)))
+            except LiteLLMAPIError as e:
+                # /budget/settings may 404 for budgets without explicit settings rows.
+                if e.status_code == 404:
+                    results.append(("get_budget_settings", True, "404 (no settings row)"))
+                else:
+                    results.append(("get_budget_settings", False, f"APIError {e.status_code}: {e}"))
+        else:
+            results.append(("get_budget_info", True, "skipped (no budgets)"))
+            results.append(("get_budget_settings", True, "skipped (no budgets)"))
+
+        # Spend family (4 read ops + 1 calculate)
+        # /global/spend/report is gated behind LiteLLM Enterprise — community
+        # tier returns 400 "You must be a LiteLLM Enterprise user". Wrapper is
+        # OK; mark as upstream-gated rather than a failure.
+        try:
+            payload = await client.get_global_spend_report(start_date=start_d, end_date=end_d)
+            results.append(("get_global_spend_report", True, _summarize(payload)))
+        except LiteLLMAPIError as e:
+            if e.status_code == 400 and "Enterprise" in str(e):
+                results.append(
+                    ("get_global_spend_report", True, "400 (Enterprise-gated, wrapper OK)")
+                )
+            else:
+                results.append(("get_global_spend_report", False, f"APIError {e.status_code}: {e}"))
+        results.append(
+            await _step(
+                "list_spend_logs", client.list_spend_logs(start_date=start_d, end_date=end_d)
+            )
+        )
+        results.append(
+            await _step(
+                "list_spend_tags", client.list_spend_tags(start_date=start_d, end_date=end_d)
+            )
+        )
+        results.append(
+            await _step(
+                "get_user_daily_activity",
+                client.get_user_daily_activity(
+                    start_date=start_d, end_date=end_d, page=1, page_size=5
+                ),
+            )
+        )
+        results.append(
+            await _step(
+                "calculate_spend",
+                client.calculate_spend(
+                    model="tora-no-think",
+                    messages=[{"role": "user", "content": "hi"}],
+                ),
+            )
+        )
+
+        # Health family (4 read ops, test_connection skipped — write-shaped)
+        results.append(await _step("check_health_backlog", client.check_health_backlog()))
+        results.append(await _step("get_health_latest", client.get_health_latest()))
+        results.append(await _step("get_health_history", client.get_health_history(limit=5)))
+        # /health probes every router-registered deployment — can take 30+s.
+        # Narrow to a single small local model.
+        results.append(await _step("check_health", client.check_health(model="tora-no-think")))
+
+        # Execution family (3 paths) — these spend real (small) tokens against
+        # local vLLM deployments. Skip via SMOKE_SKIP_EXEC=1 if needed.
+        if os.environ.get("SMOKE_SKIP_EXEC"):
+            results.append(("chat_completion", True, "skipped (SMOKE_SKIP_EXEC)"))
+            results.append(("completion", True, "skipped (SMOKE_SKIP_EXEC)"))
+            results.append(("embed", True, "skipped (SMOKE_SKIP_EXEC)"))
+        else:
+            try:
+                cc = await client.chat_completion(
+                    model="tora-no-think",
+                    messages=[{"role": "user", "content": "Reply with: ok"}],
+                    body={"max_tokens": 5, "temperature": 0.0},
+                )
+                results.append(("chat_completion", True, _summarize(cc)))
+            except LiteLLMAPIError as e:
+                results.append(("chat_completion", False, f"APIError {e.status_code}: {e}"))
+
+            # Legacy /v1/completions: many chat-only models 400 here. Mark
+            # 400/404/422 as "expected" since no legacy-text deployment exists.
+            try:
+                comp = await client.completion(
+                    model="tora-no-think",
+                    prompt="The capital of France is",
+                    body={"max_tokens": 3, "temperature": 0.0},
+                )
+                results.append(("completion", True, _summarize(comp)))
+            except LiteLLMAPIError as e:
+                if e.status_code in {400, 404, 422}:
+                    results.append(
+                        ("completion", True, f"{e.status_code} (no legacy-text deployment)")
+                    )
+                else:
+                    results.append(("completion", False, f"APIError {e.status_code}: {e}"))
+
+            try:
+                emb = await client.embed(
+                    model="qwen/qwen3-embedding-0.6b",
+                    input=["smoke test"],
+                )
+                results.append(("embed", True, _summarize(emb)))
+            except LiteLLMAPIError as e:
+                results.append(("embed", False, f"APIError {e.status_code}: {e}"))
+
     finally:
         await client.close()
 
