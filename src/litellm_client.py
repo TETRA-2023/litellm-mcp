@@ -527,3 +527,24 @@ class LiteLLMClient:
             extras,
         )
         return await self._request("POST", "/key/update", json=body)
+
+    async def regenerate_key(
+        self,
+        key: str,
+        new_master_key: Optional[str] = None,
+        duration: Optional[str] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Regenerate a virtual key (`POST /key/{key}/regenerate`).
+
+        Returns a payload containing the new key value. The body is optional;
+        if you want to atomically update settings on the new key, pass them via
+        `extras` (matches RegenerateKeyRequest in upstream Swagger).
+        """
+        body = self._build_key_body(
+            {"new_master_key": new_master_key, "duration": duration},
+            extras,
+        )
+        return await self._request(
+            "POST", f"/key/{key}/regenerate", json=body or None
+        )

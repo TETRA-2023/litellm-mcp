@@ -521,6 +521,21 @@ async def update_key(
 
 
 @mcp.tool()
+async def regenerate_key(
+    key: str,
+    new_master_key: Optional[str] = None,
+    duration: Optional[str] = None,
+    extras: Optional[dict] = None,
+) -> dict:
+    """Regenerate a virtual key (`POST /key/{key}/regenerate`).
+
+    Returns the new key value. Body is optional; pass `extras` to atomically
+    update RegenerateKeyRequest fields on the new key.
+    """
+    return await get_client().regenerate_key(key, new_master_key, duration, extras)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

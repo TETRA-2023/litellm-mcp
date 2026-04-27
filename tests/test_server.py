@@ -447,6 +447,22 @@ class TestUpdateKey:
         assert call.args[11] == {"max_parallel_requests": 8}
 
 
+class TestRegenerateKey:
+    @pytest.mark.asyncio
+    async def test_no_body(self, mock_client):
+        mock_client.regenerate_key.return_value = {"key": "sk-new"}
+        await src.server.regenerate_key("sk-old")
+        mock_client.regenerate_key.assert_awaited_once_with("sk-old", None, None, None)
+
+    @pytest.mark.asyncio
+    async def test_with_extras(self, mock_client):
+        mock_client.regenerate_key.return_value = {"key": "sk-new"}
+        await src.server.regenerate_key("sk-old", extras={"max_budget": 100.0})
+        mock_client.regenerate_key.assert_awaited_once_with(
+            "sk-old", None, None, {"max_budget": 100.0}
+        )
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client
