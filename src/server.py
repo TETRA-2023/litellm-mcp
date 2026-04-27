@@ -58,6 +58,78 @@ RESPONSE_FIELDS: dict[str, dict[str, Optional[list[str]]]] = {
         "standard": ["model_group", "providers", "max_input_tokens", "max_output_tokens"],
         "full": None,
     },
+    "user": {
+        "minimal": ["user_id", "user_email"],
+        "standard": [
+            "user_id",
+            "user_email",
+            "user_alias",
+            "user_role",
+            "teams",
+            "organizations",
+            "models",
+            "max_budget",
+            "spend",
+            "blocked",
+        ],
+        "full": None,
+    },
+    "customer": {
+        "minimal": ["user_id", "alias"],
+        "standard": [
+            "user_id",
+            "alias",
+            "max_budget",
+            "spend",
+            "blocked",
+            "default_model",
+            "allowed_model_region",
+            "budget_duration",
+        ],
+        "full": None,
+    },
+    "organization": {
+        "minimal": ["organization_id", "organization_alias"],
+        "standard": [
+            "organization_id",
+            "organization_alias",
+            "models",
+            "max_budget",
+            "spend",
+            "budget_duration",
+            "metadata",
+        ],
+        "full": None,
+    },
+    "project": {
+        "minimal": ["project_id", "project_alias"],
+        "standard": [
+            "project_id",
+            "project_alias",
+            "team_id",
+            "description",
+            "models",
+            "max_budget",
+            "spend",
+            "blocked",
+            "tags",
+        ],
+        "full": None,
+    },
+    "user_access_group": {
+        "minimal": ["access_group_id", "access_group_name"],
+        "standard": [
+            "access_group_id",
+            "access_group_name",
+            "description",
+            "access_model_names",
+            "access_mcp_server_ids",
+            "access_agent_ids",
+            "assigned_team_ids",
+            "assigned_key_ids",
+        ],
+        "full": None,
+    },
 }
 
 VALID_VERBOSITY_LEVELS = {"minimal", "standard", "full"}
@@ -670,6 +742,693 @@ async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
             single deployment.
     """
     return await get_client().get_model_info(litellm_model_id)
+
+
+# ── Internal User tools ──
+
+
+@mcp.tool()
+async def list_users(
+    role: Optional[str] = None,
+    user_ids: Optional[str] = None,
+    sso_user_ids: Optional[str] = None,
+    user_email: Optional[str] = None,
+    team: Optional[str] = None,
+    page: Optional[int] = None,
+    page_size: Optional[int] = None,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = None,
+    organization_ids: Optional[str] = None,
+    verbosity: str = "standard",
+) -> dict:
+    """List internal LiteLLM users (`GET /user/list`).
+
+    `user_ids`, `sso_user_ids`, `organization_ids` are upstream-comma-separated
+    strings (not arrays). Verbosity filters the items inside the `users` array
+    if present.
+
+    Args:
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().list_users(
+        role,
+        user_ids,
+        sso_user_ids,
+        user_email,
+        team,
+        page,
+        page_size,
+        sort_by,
+        sort_order,
+        organization_ids,
+    )
+    if isinstance(payload, dict) and "users" in payload:
+        payload = dict(payload)
+        payload["users"] = _filter_response(payload["users"], "user", verbosity)
+    elif isinstance(payload, list):
+        payload = _filter_response(payload, "user", verbosity)
+    return payload
+
+
+@mcp.tool()
+async def get_user_info(user_id: Optional[str] = None, verbosity: str = "standard") -> dict:
+    """Get info about an internal user (`GET /user/info`).
+
+    Args:
+        user_id: Optional user id. If omitted, returns info about the caller.
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().get_user_info(user_id)
+    return _filter_response(payload, "user", verbosity)
+
+
+@mcp.tool()
+async def create_user(
+    user_email: Optional[str] = None,
+    user_id: Optional[str] = None,
+    user_alias: Optional[str] = None,
+    user_role: Optional[str] = None,
+    teams: Optional[list[str]] = None,
+    organizations: Optional[list[str]] = None,
+    models: Optional[list[str]] = None,
+    max_budget: Optional[float] = None,
+    budget_duration: Optional[str] = None,
+    tpm_limit: Optional[int] = None,
+    rpm_limit: Optional[int] = None,
+    metadata: Optional[dict] = None,
+    guardrails: Optional[list[str]] = None,
+    blocked: Optional[bool] = None,
+    auto_create_key: Optional[bool] = None,
+    send_invite_email: Optional[bool] = None,
+    extras: Optional[dict] = None,
+) -> dict:
+    """Create an internal user (`POST /user/new`).
+
+    All fields are optional. Use `extras` for any NewUserRequest field not
+    surfaced as a named arg (~20 less common fields like `permissions`,
+    `model_max_budget`, `aliases`, `object_permission`).
+    """
+    return await get_client().create_user(
+        user_email,
+        user_id,
+        user_alias,
+        user_role,
+        teams,
+        organizations,
+        models,
+        max_budget,
+        budget_duration,
+        tpm_limit,
+        rpm_limit,
+        metadata,
+        guardrails,
+        blocked,
+        auto_create_key,
+        send_invite_email,
+        extras,
+    )
+
+
+@mcp.tool()
+async def update_user(
+    user_id: str,
+    user_email: Optional[str] = None,
+    user_alias: Optional[str] = None,
+    user_role: Optional[str] = None,
+    password: Optional[str] = None,
+    models: Optional[list[str]] = None,
+    max_budget: Optional[float] = None,
+    budget_duration: Optional[str] = None,
+    tpm_limit: Optional[int] = None,
+    rpm_limit: Optional[int] = None,
+    metadata: Optional[dict] = None,
+    guardrails: Optional[list[str]] = None,
+    blocked: Optional[bool] = None,
+    extras: Optional[dict] = None,
+) -> dict:
+    """Update an internal user (`POST /user/update`).
+
+    Only `user_id` is required. Use `extras` for less-common UpdateUserRequest
+    fields (e.g. `permissions`, `aliases`, `object_permission`).
+    """
+    return await get_client().update_user(
+        user_id,
+        user_email,
+        user_alias,
+        user_role,
+        password,
+        models,
+        max_budget,
+        budget_duration,
+        tpm_limit,
+        rpm_limit,
+        metadata,
+        guardrails,
+        blocked,
+        extras,
+    )
+
+
+@mcp.tool()
+async def delete_user(user_ids: list[str]) -> dict:
+    """Batch-delete internal users (`POST /user/delete`).
+
+    Args:
+        user_ids: list of user ids to delete (at least one).
+    """
+    return await get_client().delete_user(user_ids)
+
+
+# ── Customer tools ──
+
+
+@mcp.tool()
+async def list_customers(verbosity: str = "standard") -> Any:
+    """List end-user customers (`GET /customer/list`).
+
+    Args:
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().list_customers()
+    return _filter_response(payload, "customer", verbosity)
+
+
+@mcp.tool()
+async def get_customer_info(end_user_id: str, verbosity: str = "standard") -> dict:
+    """Get a customer by end_user_id (`GET /customer/info`).
+
+    Args:
+        end_user_id: customer's stable end-user id.
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().get_customer_info(end_user_id)
+    return _filter_response(payload, "customer", verbosity)
+
+
+@mcp.tool()
+async def create_customer(
+    user_id: str,
+    alias: Optional[str] = None,
+    max_budget: Optional[float] = None,
+    soft_budget: Optional[float] = None,
+    budget_id: Optional[str] = None,
+    budget_duration: Optional[str] = None,
+    tpm_limit: Optional[int] = None,
+    rpm_limit: Optional[int] = None,
+    max_parallel_requests: Optional[int] = None,
+    blocked: Optional[bool] = None,
+    allowed_model_region: Optional[str] = None,
+    default_model: Optional[str] = None,
+    extras: Optional[dict] = None,
+) -> dict:
+    """Create a customer (`POST /customer/new`).
+
+    Args:
+        user_id: customer's stable end-user id (required).
+        extras: any NewCustomerRequest field not surfaced as a named arg.
+    """
+    return await get_client().create_customer(
+        user_id,
+        alias,
+        max_budget,
+        soft_budget,
+        budget_id,
+        budget_duration,
+        tpm_limit,
+        rpm_limit,
+        max_parallel_requests,
+        blocked,
+        allowed_model_region,
+        default_model,
+        extras,
+    )
+
+
+@mcp.tool()
+async def update_customer(
+    user_id: str,
+    alias: Optional[str] = None,
+    max_budget: Optional[float] = None,
+    budget_id: Optional[str] = None,
+    blocked: Optional[bool] = None,
+    allowed_model_region: Optional[str] = None,
+    default_model: Optional[str] = None,
+    extras: Optional[dict] = None,
+) -> dict:
+    """Update a customer (`POST /customer/update`).
+
+    UpdateCustomerRequest is intentionally narrower than NewCustomerRequest
+    upstream (no `tpm_limit` / `rpm_limit` / `max_parallel_requests`). Pass
+    less-common fields via `extras`.
+    """
+    return await get_client().update_customer(
+        user_id, alias, max_budget, budget_id, blocked, allowed_model_region, default_model, extras
+    )
+
+
+@mcp.tool()
+async def delete_customer(user_ids: list[str]) -> dict:
+    """Batch-delete customers (`POST /customer/delete`).
+
+    Args:
+        user_ids: list of customer ids to delete.
+    """
+    return await get_client().delete_customer(user_ids)
+
+
+@mcp.tool()
+async def set_customer_blocked(user_ids: list[str], blocked: bool) -> dict:
+    """Block or unblock customers.
+
+    Routes to `POST /customer/block` when `blocked=True`, else
+    `POST /customer/unblock`. Body in both cases is `{"user_ids": [...]}`.
+
+    Args:
+        user_ids: list of customer ids.
+        blocked: True to block, False to unblock.
+    """
+    return await get_client().set_customer_blocked(user_ids, blocked)
+
+
+@mcp.tool()
+async def get_customer_daily_activity(
+    end_user_ids: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+    page: Optional[int] = None,
+    page_size: Optional[int] = None,
+    exclude_end_user_ids: Optional[str] = None,
+) -> dict:
+    """Per-customer daily activity (`GET /customer/daily/activity`).
+
+    Args:
+        start_date / end_date: ISO `YYYY-MM-DD`.
+        end_user_ids / exclude_end_user_ids: comma-separated customer ids.
+    """
+    return await get_client().get_customer_daily_activity(
+        end_user_ids,
+        start_date,
+        end_date,
+        model,
+        api_key,
+        page,
+        page_size,
+        exclude_end_user_ids,
+    )
+
+
+# ── Organization tools ──
+
+
+@mcp.tool()
+async def list_organizations(
+    org_id: Optional[str] = None,
+    org_alias: Optional[str] = None,
+    verbosity: str = "standard",
+) -> Any:
+    """List organizations (`GET /organization/list`).
+
+    Args:
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().list_organizations(org_id, org_alias)
+    return _filter_response(payload, "organization", verbosity)
+
+
+@mcp.tool()
+async def get_organization_info(organization_id: str, verbosity: str = "standard") -> dict:
+    """Get a single organization by id (`GET /organization/info`).
+
+    Args:
+        organization_id: organization id.
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().get_organization_info(organization_id)
+    return _filter_response(payload, "organization", verbosity)
+
+
+@mcp.tool()
+async def create_organization(
+    organization_alias: str,
+    organization_id: Optional[str] = None,
+    models: Optional[list[str]] = None,
+    max_budget: Optional[float] = None,
+    soft_budget: Optional[float] = None,
+    budget_id: Optional[str] = None,
+    budget_duration: Optional[str] = None,
+    tpm_limit: Optional[int] = None,
+    rpm_limit: Optional[int] = None,
+    max_parallel_requests: Optional[int] = None,
+    metadata: Optional[dict] = None,
+    extras: Optional[dict] = None,
+) -> dict:
+    """Create an organization (`POST /organization/new`).
+
+    Args:
+        organization_alias: human-readable name (required).
+        extras: less-common NewOrganizationRequest fields.
+    """
+    return await get_client().create_organization(
+        organization_alias,
+        organization_id,
+        models,
+        max_budget,
+        soft_budget,
+        budget_id,
+        budget_duration,
+        tpm_limit,
+        rpm_limit,
+        max_parallel_requests,
+        metadata,
+        extras,
+    )
+
+
+@mcp.tool()
+async def update_organization(
+    organization_id: str,
+    organization_alias: Optional[str] = None,
+    models: Optional[list[str]] = None,
+    max_budget: Optional[float] = None,
+    budget_duration: Optional[str] = None,
+    tpm_limit: Optional[int] = None,
+    rpm_limit: Optional[int] = None,
+    metadata: Optional[dict] = None,
+    extras: Optional[dict] = None,
+) -> dict:
+    """Patch an organization (`PATCH /organization/update`).
+
+    Upstream OpenAPI omits the request body schema for this endpoint; the
+    wrapper builds an UpdateOrganization payload mirroring NewOrganizationRequest.
+    Use `extras` for any field not surfaced as a named arg.
+    """
+    return await get_client().update_organization(
+        organization_id,
+        organization_alias,
+        models,
+        max_budget,
+        budget_duration,
+        tpm_limit,
+        rpm_limit,
+        metadata,
+        extras,
+    )
+
+
+@mcp.tool()
+async def delete_organization(organization_ids: list[str]) -> dict:
+    """Batch-delete organizations (`DELETE /organization/delete`).
+
+    DELETE with JSON body — `{"organization_ids": [...]}`.
+    """
+    return await get_client().delete_organization(organization_ids)
+
+
+@mcp.tool()
+async def add_org_member(
+    organization_id: str,
+    member: dict,
+    max_budget_in_organization: Optional[float] = None,
+) -> dict:
+    """Add a member to an organization (`POST /organization/member_add`).
+
+    Args:
+        organization_id: target org id.
+        member: upstream Member shape, e.g.
+            `{"user_id": "u-1", "role": "internal_user"}` or
+            `{"user_email": "alice@x.com", "role": "org_admin"}`.
+        max_budget_in_organization: per-member budget cap inside the org.
+    """
+    return await get_client().add_org_member(organization_id, member, max_budget_in_organization)
+
+
+@mcp.tool()
+async def update_org_member(
+    organization_id: str,
+    user_id: Optional[str] = None,
+    user_email: Optional[str] = None,
+    role: Optional[str] = None,
+    max_budget_in_organization: Optional[float] = None,
+) -> dict:
+    """Update an org member (`PATCH /organization/member_update`).
+
+    Identify the member by `user_id` or `user_email`. Only the fields you
+    pass are sent.
+    """
+    return await get_client().update_org_member(
+        organization_id, user_id, user_email, role, max_budget_in_organization
+    )
+
+
+@mcp.tool()
+async def delete_org_member(
+    organization_id: str,
+    user_id: Optional[str] = None,
+    user_email: Optional[str] = None,
+) -> dict:
+    """Remove an org member (`DELETE /organization/member_delete`).
+
+    Identify the member by `user_id` or `user_email`. DELETE with JSON body.
+    """
+    return await get_client().delete_org_member(organization_id, user_id, user_email)
+
+
+@mcp.tool()
+async def get_org_daily_activity(
+    organization_ids: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+    page: Optional[int] = None,
+    page_size: Optional[int] = None,
+    exclude_organization_ids: Optional[str] = None,
+) -> dict:
+    """Per-org daily activity (`GET /organization/daily/activity`).
+
+    Args:
+        start_date / end_date: ISO `YYYY-MM-DD`.
+        organization_ids / exclude_organization_ids: comma-separated org ids.
+    """
+    return await get_client().get_org_daily_activity(
+        organization_ids,
+        start_date,
+        end_date,
+        model,
+        api_key,
+        page,
+        page_size,
+        exclude_organization_ids,
+    )
+
+
+# ── Project tools ──
+
+
+@mcp.tool()
+async def list_projects(verbosity: str = "standard") -> Any:
+    """List projects (`GET /project/list`).
+
+    Args:
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().list_projects()
+    return _filter_response(payload, "project", verbosity)
+
+
+@mcp.tool()
+async def get_project_info(project_id: str, verbosity: str = "standard") -> dict:
+    """Get a project by id (`GET /project/info`).
+
+    Args:
+        project_id: project id.
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().get_project_info(project_id)
+    return _filter_response(payload, "project", verbosity)
+
+
+@mcp.tool()
+async def create_project(
+    team_id: str,
+    project_id: Optional[str] = None,
+    project_alias: Optional[str] = None,
+    description: Optional[str] = None,
+    models: Optional[list[str]] = None,
+    max_budget: Optional[float] = None,
+    soft_budget: Optional[float] = None,
+    budget_duration: Optional[str] = None,
+    tpm_limit: Optional[int] = None,
+    rpm_limit: Optional[int] = None,
+    tags: Optional[list[str]] = None,
+    metadata: Optional[dict] = None,
+    guardrails: Optional[list[str]] = None,
+    blocked: Optional[bool] = None,
+    extras: Optional[dict] = None,
+) -> dict:
+    """Create a project (`POST /project/new`).
+
+    Args:
+        team_id: owning team (required — projects belong to teams).
+        extras: less-common NewProjectRequest fields.
+    """
+    return await get_client().create_project(
+        team_id,
+        project_id,
+        project_alias,
+        description,
+        models,
+        max_budget,
+        soft_budget,
+        budget_duration,
+        tpm_limit,
+        rpm_limit,
+        tags,
+        metadata,
+        guardrails,
+        blocked,
+        extras,
+    )
+
+
+@mcp.tool()
+async def update_project(
+    project_id: str,
+    project_alias: Optional[str] = None,
+    description: Optional[str] = None,
+    models: Optional[list[str]] = None,
+    max_budget: Optional[float] = None,
+    budget_duration: Optional[str] = None,
+    tpm_limit: Optional[int] = None,
+    rpm_limit: Optional[int] = None,
+    tags: Optional[list[str]] = None,
+    metadata: Optional[dict] = None,
+    guardrails: Optional[list[str]] = None,
+    blocked: Optional[bool] = None,
+    extras: Optional[dict] = None,
+) -> dict:
+    """Update a project (`POST /project/update`).
+
+    Only `project_id` is required.
+    """
+    return await get_client().update_project(
+        project_id,
+        project_alias,
+        description,
+        models,
+        max_budget,
+        budget_duration,
+        tpm_limit,
+        rpm_limit,
+        tags,
+        metadata,
+        guardrails,
+        blocked,
+        extras,
+    )
+
+
+@mcp.tool()
+async def delete_project(project_ids: list[str]) -> dict:
+    """Batch-delete projects (`DELETE /project/delete`).
+
+    DELETE with JSON body — `{"project_ids": [...]}`.
+    """
+    return await get_client().delete_project(project_ids)
+
+
+# ── Unified User Access Group tools ──
+
+
+@mcp.tool()
+async def list_user_access_groups(verbosity: str = "standard") -> Any:
+    """List unified user access groups (`GET /v1/unified_access_group`).
+
+    Distinct from `list_model_access_groups` (in #535) — unified access groups
+    gate users/teams against models, MCP servers, and agents in one shape.
+
+    Args:
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().list_user_access_groups()
+    return _filter_response(payload, "user_access_group", verbosity)
+
+
+@mcp.tool()
+async def get_user_access_group(access_group_id: str, verbosity: str = "standard") -> dict:
+    """Get a unified user access group by id (`GET /v1/unified_access_group/{id}`).
+
+    Args:
+        access_group_id: the group's id.
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().get_user_access_group(access_group_id)
+    return _filter_response(payload, "user_access_group", verbosity)
+
+
+@mcp.tool()
+async def create_user_access_group(
+    access_group_name: str,
+    description: Optional[str] = None,
+    access_model_names: Optional[list[str]] = None,
+    access_mcp_server_ids: Optional[list[str]] = None,
+    access_agent_ids: Optional[list[str]] = None,
+    assigned_team_ids: Optional[list[str]] = None,
+    assigned_key_ids: Optional[list[str]] = None,
+) -> dict:
+    """Create a unified user access group (`POST /v1/unified_access_group`).
+
+    Args:
+        access_group_name: human-readable name (required).
+        access_*: lists of resources this group grants access to (models / MCP
+            servers / agents).
+        assigned_*: lists of teams / keys this group is assigned to.
+    """
+    return await get_client().create_user_access_group(
+        access_group_name,
+        description,
+        access_model_names,
+        access_mcp_server_ids,
+        access_agent_ids,
+        assigned_team_ids,
+        assigned_key_ids,
+    )
+
+
+@mcp.tool()
+async def update_user_access_group(
+    access_group_id: str,
+    access_group_name: Optional[str] = None,
+    description: Optional[str] = None,
+    access_model_names: Optional[list[str]] = None,
+    access_mcp_server_ids: Optional[list[str]] = None,
+    access_agent_ids: Optional[list[str]] = None,
+    assigned_team_ids: Optional[list[str]] = None,
+    assigned_key_ids: Optional[list[str]] = None,
+) -> dict:
+    """Update a unified user access group (`PUT /v1/unified_access_group/{id}`).
+
+    All fields are optional; only the ones passed are sent. Note: this is
+    `PUT`, not `PATCH`, but the upstream merges sparsely.
+    """
+    return await get_client().update_user_access_group(
+        access_group_id,
+        access_group_name,
+        description,
+        access_model_names,
+        access_mcp_server_ids,
+        access_agent_ids,
+        assigned_team_ids,
+        assigned_key_ids,
+    )
+
+
+@mcp.tool()
+async def delete_user_access_group(access_group_id: str) -> dict:
+    """Delete a unified user access group (`DELETE /v1/unified_access_group/{id}`)."""
+    return await get_client().delete_user_access_group(access_group_id)
 
 
 # ── Entrypoint ──
