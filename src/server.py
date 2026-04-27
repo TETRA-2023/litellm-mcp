@@ -308,6 +308,18 @@ async def get_credential(credential_name: str, verbosity: str = "standard") -> d
 
 
 @mcp.tool()
+async def get_credential_by_model(model_id: str, verbosity: str = "standard") -> dict:
+    """Get the credential bound to a deployment (`GET /credentials/by_model/{model_id}`).
+
+    Args:
+        model_id: deployment id.
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().get_credential_by_model(model_id)
+    return _filter_response(payload, "credential", verbosity)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

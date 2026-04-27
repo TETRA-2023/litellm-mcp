@@ -286,3 +286,7 @@ class LiteLLMClient:
     async def get_credential(self, credential_name: str) -> dict:
         """Get a credential by name (`GET /credentials/by_name/{credential_name}`)."""
         return await self._request("GET", f"/credentials/by_name/{credential_name}")
+
+    async def get_credential_by_model(self, model_id: str) -> dict:
+        """Get the credential bound to a deployment (`GET /credentials/by_model/{model_id}`)."""
+        return await self._request("GET", f"/credentials/by_model/{model_id}")
