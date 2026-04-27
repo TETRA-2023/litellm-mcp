@@ -134,3 +134,12 @@ class LiteLLMClient:
         Calls `GET /v1/models/{model_id}`.
         """
         return await self._request("GET", f"/v1/models/{model_id}")
+
+    async def get_model_info(self, litellm_model_id: Optional[str] = None) -> dict:
+        """Get admin-side model info (all deployments, or one by litellm internal id).
+
+        Calls `GET /model/info` with optional `litellm_model_id` query param.
+        Returns the upstream payload as-is (typically `{"data": [...]}`).
+        """
+        params = {"litellm_model_id": litellm_model_id} if litellm_model_id else None
+        return await self._request("GET", "/model/info", params=params)

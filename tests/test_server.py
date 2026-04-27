@@ -81,6 +81,22 @@ class TestGetModel:
         assert result == {"id": "gpt-4o"}
 
 
+class TestGetModelInfo:
+    @pytest.mark.asyncio
+    async def test_passthrough_no_filter(self, mock_client):
+        payload = {"data": [{"model_name": "gpt-4o", "litellm_params": {"model": "openai/gpt-4o"}}]}
+        mock_client.get_model_info.return_value = payload
+        result = await src.server.get_model_info()
+        assert result == payload
+        mock_client.get_model_info.assert_awaited_once_with(None)
+
+    @pytest.mark.asyncio
+    async def test_passes_litellm_model_id(self, mock_client):
+        mock_client.get_model_info.return_value = {"data": []}
+        await src.server.get_model_info("abc-123")
+        mock_client.get_model_info.assert_awaited_once_with("abc-123")
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

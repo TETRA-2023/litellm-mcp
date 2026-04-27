@@ -127,6 +127,21 @@ async def get_model(model_id: str, verbosity: str = "standard") -> dict:
     return _filter_response(model, "model", verbosity)
 
 
+@mcp.tool()
+async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
+    """Get admin-side model info — full deployment details (`GET /model/info`).
+
+    Returns the upstream payload as-is (no verbosity filtering — this endpoint
+    surfaces operational details like litellm_params and model_info that
+    callers usually want to see in full).
+
+    Args:
+        litellm_model_id: Optional litellm internal model id to filter to a
+            single deployment.
+    """
+    return await get_client().get_model_info(litellm_model_id)
+
+
 # ── Entrypoint ──
 
 
