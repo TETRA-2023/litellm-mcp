@@ -8,10 +8,12 @@ Foundation (US #534) shipped `list_models`. Admin slice (US #535) added 32 tools
 covering models, model hub, model access groups, credentials, and virtual keys.
 Identity slice (US #536) added 31 tools covering internal users, customers,
 organizations (with member management), projects, and unified user access
-groups. Spend/execution/health slice (US #596) adds 19 tools covering budgets,
+groups. Spend/execution/health slice (US #596) added 19 tools covering budgets,
 spend reporting, the three core execution verbs (chat / completion / embed),
-and admin health probes. Subsequent slices add governance and passthrough
-(#538) and the MCP-of-MCPs gateway (#558).
+and admin health probes. MCP-Gateway slice (US #558) adds 25 tools that let
+the LiteLLM proxy act as an MCP-of-MCPs: register upstream HTTP-transport MCP
+servers and list / invoke their tools through the proxy. Governance and
+passthrough (#538) is the remaining deferred slice.
 
 ## Setup
 
@@ -246,6 +248,62 @@ via the `body: dict` argument.
 | `get_health_history` | `GET /health/history` |
 | `get_health_latest` | `GET /health/latest` |
 | `test_model_connection` | `POST /health/test_connection` |
+
+### MCP Gateway — Server CRUD (6)
+
+| Tool | Endpoint |
+|------|----------|
+| `list_mcp_servers` | `GET /v1/mcp/server` |
+| `get_mcp_server` | `GET /v1/mcp/server/{server_id}` |
+| `add_mcp_server` | `POST /v1/mcp/server` (admin path, approved) |
+| `update_mcp_server` | `PUT /v1/mcp/server` (server_id in body) |
+| `delete_mcp_server` | `DELETE /v1/mcp/server/{server_id}` |
+| `register_mcp_server` | `POST /v1/mcp/server/register` (user path, pending review) |
+
+### MCP Gateway — Submissions (3)
+
+| Tool | Endpoint |
+|------|----------|
+| `list_mcp_server_submissions` | `GET /v1/mcp/server/submissions` |
+| `approve_mcp_server_submission` | `PUT /v1/mcp/server/{id}/approve` |
+| `reject_mcp_server_submission` | `PUT /v1/mcp/server/{id}/reject` |
+
+### MCP Gateway — Tool Discovery & Invocation (4) + Health (1)
+
+| Tool | Endpoint |
+|------|----------|
+| `check_mcp_servers_health` | `GET /v1/mcp/server/health` |
+| `list_mcp_tools` | `GET /v1/mcp/tools` |
+| `list_mcp_tools_rest` | `GET /mcp-rest/tools/list` |
+| `call_mcp_tool` | `POST /mcp-rest/tools/call` |
+| `test_mcp_connection` | `POST /mcp-rest/test/connection` |
+
+`call_mcp_tool` body shape: `{"server_id": ..., "name": ..., "arguments": {...}}`. Returns the provider-shaped MCP envelope (`{"content": [...], "isError": bool}`) unmodified.
+
+### MCP Gateway — Discovery / Registry / Hub (6)
+
+| Tool | Endpoint |
+|------|----------|
+| `discover_mcp_servers` | `GET /v1/mcp/discover` |
+| `get_mcp_openapi_registry` | `GET /v1/mcp/openapi-registry` |
+| `get_mcp_registry` | `GET /v1/mcp/registry.json` |
+| `list_mcp_access_groups` | `GET /v1/mcp/access_groups` |
+| `make_mcp_servers_public` | `POST /v1/mcp/make_public` |
+| `get_public_mcp_hub` | `GET /public/mcp_hub` |
+
+### MCP Gateway — User Credentials (4) + Utility (1)
+
+| Tool | Endpoint |
+|------|----------|
+| `list_mcp_user_credentials` | `GET /v1/mcp/user-credentials` |
+| `set_mcp_user_credential(server_id, credential, oauth: bool)` | `POST /v1/mcp/server/{id}/user-credential` ∣ `POST .../oauth-user-credential` |
+| `delete_mcp_user_credential(server_id, oauth: bool)` | `DELETE /v1/mcp/server/{id}/user-credential` ∣ `DELETE .../oauth-user-credential` |
+| `get_mcp_oauth_user_credential_status` | `GET /v1/mcp/server/{id}/oauth-user-credential/status` |
+| `get_mcp_client_ip` | `GET /v1/mcp/network/client-ip` |
+
+The `oauth: bool` discriminator on `set_mcp_user_credential` and `delete_mcp_user_credential` compresses the OAuth + non-OAuth endpoints into one tool each. Non-OAuth body: `{"credential": ..., "save": ...}`. OAuth body: `{"access_token": ..., "refresh_token": ..., "expires_in": ..., "scopes": [...]}`.
+
+`add_mcp_server` / `update_mcp_server` / `register_mcp_server` / `test_mcp_connection` accept an `extras: dict` argument for the long tail of `NewMCPServerRequest` fields not surfaced as named args (~20 less common fields like `static_headers`, `oauth2_flow`, `tool_name_to_display_name`, `allow_all_keys`).
 
 ## Development
 
