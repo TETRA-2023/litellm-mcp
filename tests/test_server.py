@@ -184,6 +184,16 @@ class TestMakeModelGroupPublic:
         )
 
 
+class TestUpdateModelHubLinks:
+    @pytest.mark.asyncio
+    async def test_passes_links(self, mock_client):
+        mock_client.update_model_hub_links.return_value = {"ok": True}
+        await src.server.update_model_hub_links({"Docs": "https://example.com"})
+        mock_client.update_model_hub_links.assert_awaited_once_with(
+            {"Docs": "https://example.com"}
+        )
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

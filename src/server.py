@@ -209,6 +209,17 @@ async def make_model_group_public(model_groups: list[str]) -> dict:
 
 
 @mcp.tool()
+async def update_model_hub_links(useful_links: dict) -> dict:
+    """Update the Model Hub useful-links section (`POST /model_hub/update_useful_links`).
+
+    Args:
+        useful_links: free-form mapping of label → URL
+            (e.g. `{"Documentation": "https://..."}`).
+    """
+    return await get_client().update_model_hub_links(useful_links)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

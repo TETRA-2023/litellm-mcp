@@ -213,3 +213,12 @@ class LiteLLMClient:
         return await self._request(
             "POST", "/model_group/make_public", json={"model_groups": model_groups}
         )
+
+    async def update_model_hub_links(self, useful_links: dict) -> dict:
+        """Update the Model Hub useful-links section (`POST /model_hub/update_useful_links`).
+
+        `useful_links` is a free-form mapping (e.g. `{"Documentation": "https://..."}`).
+        """
+        return await self._request(
+            "POST", "/model_hub/update_useful_links", json={"useful_links": useful_links}
+        )
