@@ -13,8 +13,11 @@ spend reporting, the three core execution verbs (chat / completion / embed),
 and admin health probes. MCP-Gateway slice (US #558) added 25 tools that let
 the LiteLLM proxy act as an MCP-of-MCPs: register upstream HTTP-transport MCP
 servers and list / invoke their tools through the proxy. MCP-Toolsets slice
-(US #688) adds 5 tools to manage named bundles of cross-server tools.
-Governance and passthrough (#538) is the remaining deferred slice.
+(US #688) added 5 tools to manage named bundles of cross-server tools.
+Passthrough slice (US #698) adds one generic `passthrough` tool that proxies
+to any of LiteLLM's 15+ provider native APIs (~85 Swagger ops in one tool).
+Remaining deferred work in #538 covers governance, multi-modal, and the
+non-passthrough operations of the deferable index.
 
 ## Setup
 
@@ -317,6 +320,16 @@ The `oauth: bool` discriminator on `set_mcp_user_credential` and `delete_mcp_use
 Toolsets are named bundles of tools sourced from one or more registered MCP servers (e.g. a `research` toolset combining `resolve-library-id` from Context7 with `search` from another MCP). Once defined, the proxy exposes each toolset as a brokered MCP endpoint at `/toolset/{name}/mcp` — that transport route is intentionally not wrapped here.
 
 `add_mcp_server` / `update_mcp_server` / `register_mcp_server` / `test_mcp_connection` accept an `extras: dict` argument for the long tail of `NewMCPServerRequest` fields not surfaced as named args (~20 less common fields like `static_headers`, `oauth2_flow`, `tool_name_to_display_name`, `allow_all_keys`).
+
+### Provider Passthrough (1)
+
+| Tool | Endpoint |
+|------|----------|
+| `passthrough(provider, endpoint, method, body, params, headers)` | `<METHOD> /<provider>/<endpoint>` |
+
+Generic proxy across LiteLLM's pass-through tag (~85 ops). Known providers: `anthropic`, `openai`, `vertex_ai` (+ `vertex_ai/discovery`), `gemini`, `cohere`, `vllm`, `mistral`, `milvus`, `bedrock`, `assemblyai` (+ `eu.assemblyai`), `azure`, `azure_ai`, `cursor`, `langfuse`. Returns the upstream payload byte-faithfully (no `RESPONSE_FIELDS` filter — provider responses are too varied). Streaming is not supported in this slice.
+
+LiteLLM does not auto-inject provider auth on pass-through — the request is forwarded as-is, so providers that require their own API keys (e.g. Anthropic's `x-api-key`) need them supplied via `headers`. A 401 with a provider-shaped error envelope is proof the wrapper routed correctly.
 
 ## Development
 
