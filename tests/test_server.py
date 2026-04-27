@@ -317,6 +317,22 @@ class TestCreateCredential:
         )
 
 
+class TestUpdateCredential:
+    @pytest.mark.asyncio
+    async def test_passes_full_body(self, mock_client):
+        mock_client.update_credential.return_value = {"ok": True}
+        await src.server.update_credential(
+            "openai-prod",
+            {"custom_llm_provider": "openai"},
+            {"api_key": "sk-y"},
+        )
+        mock_client.update_credential.assert_awaited_once_with(
+            "openai-prod",
+            {"custom_llm_provider": "openai"},
+            {"api_key": "sk-y"},
+        )
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

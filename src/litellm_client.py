@@ -312,3 +312,23 @@ class LiteLLMClient:
         if model_id is not None:
             body["model_id"] = model_id
         return await self._request("POST", "/credentials", json=body)
+
+    async def update_credential(
+        self,
+        credential_name: str,
+        credential_info: dict,
+        credential_values: dict,
+    ) -> dict:
+        """Update a credential (`PATCH /credentials/{credential_name}`).
+
+        The CredentialItem schema requires all three fields. Path id and body
+        `credential_name` should match.
+        """
+        body = {
+            "credential_name": credential_name,
+            "credential_info": credential_info,
+            "credential_values": credential_values,
+        }
+        return await self._request(
+            "PATCH", f"/credentials/{credential_name}", json=body
+        )

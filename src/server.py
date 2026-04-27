@@ -340,6 +340,26 @@ async def create_credential(
 
 
 @mcp.tool()
+async def update_credential(
+    credential_name: str,
+    credential_info: dict,
+    credential_values: dict,
+) -> dict:
+    """Update a credential (`PATCH /credentials/{credential_name}`).
+
+    The upstream CredentialItem schema requires all three fields.
+
+    Args:
+        credential_name: name of credential to update.
+        credential_info: full metadata dict.
+        credential_values: full credential values dict.
+    """
+    return await get_client().update_credential(
+        credential_name, credential_info, credential_values
+    )
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 
