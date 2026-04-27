@@ -1207,6 +1207,348 @@ class TestTestModelConnection:
         )
 
 
+# ── MCP Gateway: server CRUD ──
+
+
+class TestListMCPServers:
+    @pytest.mark.asyncio
+    async def test_no_filter(self, mock_client):
+        mock_client.list_mcp_servers.return_value = [
+            {"server_id": "s-1", "alias": "context7", "description": "drop"}
+        ]
+        result = await src.server.list_mcp_servers(verbosity="minimal")
+        assert result == [{"server_id": "s-1", "alias": "context7"}]
+        mock_client.list_mcp_servers.assert_awaited_once_with(None)
+
+    @pytest.mark.asyncio
+    async def test_team_filter(self, mock_client):
+        mock_client.list_mcp_servers.return_value = []
+        await src.server.list_mcp_servers(team_id="t-1")
+        mock_client.list_mcp_servers.assert_awaited_once_with("t-1")
+
+
+class TestGetMCPServer:
+    @pytest.mark.asyncio
+    async def test_passes_id(self, mock_client):
+        mock_client.get_mcp_server.return_value = {
+            "server_id": "s-1",
+            "alias": "context7",
+            "transport": "http",
+            "url": "https://mcp.context7.com/mcp",
+        }
+        result = await src.server.get_mcp_server("s-1", "standard")
+        assert result["transport"] == "http"
+        mock_client.get_mcp_server.assert_awaited_once_with("s-1")
+
+
+class TestAddMCPServer:
+    @pytest.mark.asyncio
+    async def test_required_transport(self, mock_client):
+        mock_client.add_mcp_server.return_value = {"server_id": "s-1"}
+        await src.server.add_mcp_server(
+            transport="http",
+            alias="context7",
+            url="https://mcp.context7.com/mcp",
+            auth_type="none",
+        )
+        call = mock_client.add_mcp_server.await_args
+        assert call.args[0] == "http"
+        assert call.args[2] == "context7"
+        assert call.args[4] == "https://mcp.context7.com/mcp"
+        assert call.args[5] == "none"
+
+
+class TestUpdateMCPServer:
+    @pytest.mark.asyncio
+    async def test_required_id(self, mock_client):
+        mock_client.update_mcp_server.return_value = {"ok": True}
+        await src.server.update_mcp_server("s-1", description="updated")
+        mock_client.update_mcp_server.assert_awaited_once_with(
+            "s-1", None, None, "updated", None, None, None, None, None, None, None, None, None
+        )
+
+
+class TestDeleteMCPServer:
+    @pytest.mark.asyncio
+    async def test_passes_id(self, mock_client):
+        mock_client.delete_mcp_server.return_value = {"deleted": True}
+        await src.server.delete_mcp_server("s-1")
+        mock_client.delete_mcp_server.assert_awaited_once_with("s-1")
+
+
+class TestRegisterMCPServer:
+    @pytest.mark.asyncio
+    async def test_minimal(self, mock_client):
+        mock_client.register_mcp_server.return_value = {
+            "server_id": "s-1",
+            "approval_status": "pending",
+        }
+        await src.server.register_mcp_server(
+            transport="http",
+            alias="my-mcp",
+            url="https://example.com/mcp",
+        )
+        call = mock_client.register_mcp_server.await_args
+        assert call.args[0] == "http"
+        assert call.args[2] == "my-mcp"
+
+
+# ── MCP Gateway: submissions ──
+
+
+class TestListMCPServerSubmissions:
+    @pytest.mark.asyncio
+    async def test_filters_to_submission_shape(self, mock_client):
+        mock_client.list_mcp_server_submissions.return_value = [
+            {
+                "server_id": "s-1",
+                "approval_status": "pending",
+                "alias": "candidate",
+                "transport": "http",
+                "url": "https://x.com/mcp",
+                "drop_me": True,
+            }
+        ]
+        result = await src.server.list_mcp_server_submissions("standard")
+        assert "drop_me" not in result[0]
+        assert result[0]["approval_status"] == "pending"
+
+
+class TestApproveMCPServerSubmission:
+    @pytest.mark.asyncio
+    async def test_passes_id(self, mock_client):
+        mock_client.approve_mcp_server_submission.return_value = {"ok": True}
+        await src.server.approve_mcp_server_submission("s-1")
+        mock_client.approve_mcp_server_submission.assert_awaited_once_with("s-1")
+
+
+class TestRejectMCPServerSubmission:
+    @pytest.mark.asyncio
+    async def test_with_notes(self, mock_client):
+        mock_client.reject_mcp_server_submission.return_value = {"ok": True}
+        await src.server.reject_mcp_server_submission("s-1", review_notes="duplicate")
+        mock_client.reject_mcp_server_submission.assert_awaited_once_with("s-1", "duplicate")
+
+    @pytest.mark.asyncio
+    async def test_no_notes(self, mock_client):
+        mock_client.reject_mcp_server_submission.return_value = {"ok": True}
+        await src.server.reject_mcp_server_submission("s-1")
+        mock_client.reject_mcp_server_submission.assert_awaited_once_with("s-1", None)
+
+
+# ── MCP Gateway: health ──
+
+
+class TestCheckMCPServersHealth:
+    @pytest.mark.asyncio
+    async def test_filters_passed(self, mock_client):
+        mock_client.check_mcp_servers_health.return_value = [
+            {"server_id": "s-1", "status": "healthy", "latency_ms": 42, "internal": "drop"}
+        ]
+        result = await src.server.check_mcp_servers_health(server_ids="s-1,s-2")
+        assert "internal" not in result[0]
+        mock_client.check_mcp_servers_health.assert_awaited_once_with("s-1,s-2")
+
+
+# ── MCP Gateway: tool discovery & invocation ──
+
+
+class TestListMCPTools:
+    @pytest.mark.asyncio
+    async def test_filters_to_tool_shape(self, mock_client):
+        mock_client.list_mcp_tools.return_value = [
+            {
+                "name": "resolve-library-id",
+                "description": "...",
+                "server_id": "s-1",
+                "inputSchema": {"type": "object"},
+                "drop_me": True,
+            }
+        ]
+        result = await src.server.list_mcp_tools("standard")
+        assert "drop_me" not in result[0]
+        assert result[0]["name"] == "resolve-library-id"
+
+
+class TestListMCPToolsRest:
+    @pytest.mark.asyncio
+    async def test_passes_server_id_and_filters_tools_array(self, mock_client):
+        mock_client.list_mcp_tools_rest.return_value = {
+            "tools": [
+                {"name": "tool-a", "description": "...", "drop_me": True},
+                {"name": "tool-b", "description": "..."},
+            ]
+        }
+        result = await src.server.list_mcp_tools_rest(server_id="s-1", verbosity="minimal")
+        assert result["tools"] == [{"name": "tool-a"}, {"name": "tool-b"}]
+        mock_client.list_mcp_tools_rest.assert_awaited_once_with("s-1")
+
+    @pytest.mark.asyncio
+    async def test_handles_list_payload(self, mock_client):
+        mock_client.list_mcp_tools_rest.return_value = [
+            {"name": "tool-a"},
+        ]
+        result = await src.server.list_mcp_tools_rest()
+        assert result == [{"name": "tool-a"}]
+
+
+class TestCallMCPTool:
+    @pytest.mark.asyncio
+    async def test_basic(self, mock_client):
+        mock_client.call_mcp_tool.return_value = {"content": [{"type": "text", "text": "ok"}]}
+        await src.server.call_mcp_tool(
+            server_id="s-1", name="resolve-library-id", arguments={"libraryName": "react"}
+        )
+        mock_client.call_mcp_tool.assert_awaited_once_with(
+            "s-1", "resolve-library-id", {"libraryName": "react"}
+        )
+
+    @pytest.mark.asyncio
+    async def test_no_arguments(self, mock_client):
+        mock_client.call_mcp_tool.return_value = {"content": []}
+        await src.server.call_mcp_tool(server_id="s-1", name="ping")
+        mock_client.call_mcp_tool.assert_awaited_once_with("s-1", "ping", None)
+
+
+class TestTestMCPConnection:
+    @pytest.mark.asyncio
+    async def test_required_transport(self, mock_client):
+        mock_client.test_mcp_connection.return_value = {"status": "ok"}
+        await src.server.test_mcp_connection(
+            transport="http", url="https://example.com/mcp", auth_type="none"
+        )
+        mock_client.test_mcp_connection.assert_awaited_once_with(
+            "http", "https://example.com/mcp", "none", None, None, None
+        )
+
+
+# ── MCP Gateway: discovery / registry / hub ──
+
+
+class TestDiscoverMCPServers:
+    @pytest.mark.asyncio
+    async def test_filters_passed(self, mock_client):
+        mock_client.discover_mcp_servers.return_value = []
+        await src.server.discover_mcp_servers(query="docs", category="dev-tools")
+        mock_client.discover_mcp_servers.assert_awaited_once_with("docs", "dev-tools")
+
+
+class TestGetMCPOpenAPIRegistry:
+    @pytest.mark.asyncio
+    async def test_passthrough(self, mock_client):
+        mock_client.get_mcp_openapi_registry.return_value = {"version": 1}
+        result = await src.server.get_mcp_openapi_registry()
+        assert result == {"version": 1}
+
+
+class TestGetMCPRegistry:
+    @pytest.mark.asyncio
+    async def test_passthrough(self, mock_client):
+        mock_client.get_mcp_registry.return_value = {"servers": []}
+        result = await src.server.get_mcp_registry()
+        assert result == {"servers": []}
+
+
+class TestListMCPAccessGroups:
+    @pytest.mark.asyncio
+    async def test_passthrough(self, mock_client):
+        mock_client.list_mcp_access_groups.return_value = ["engineering", "ops"]
+        result = await src.server.list_mcp_access_groups()
+        assert result == ["engineering", "ops"]
+
+
+class TestMakeMCPServersPublic:
+    @pytest.mark.asyncio
+    async def test_passes_ids(self, mock_client):
+        mock_client.make_mcp_servers_public.return_value = {"ok": True}
+        await src.server.make_mcp_servers_public(["s-1", "s-2"])
+        mock_client.make_mcp_servers_public.assert_awaited_once_with(["s-1", "s-2"])
+
+
+class TestGetPublicMCPHub:
+    @pytest.mark.asyncio
+    async def test_passthrough(self, mock_client):
+        mock_client.get_public_mcp_hub.return_value = {"servers": []}
+        result = await src.server.get_public_mcp_hub()
+        assert result == {"servers": []}
+
+
+# ── MCP Gateway: user credentials ──
+
+
+class TestListMCPUserCredentials:
+    @pytest.mark.asyncio
+    async def test_filters_to_credential_shape(self, mock_client):
+        mock_client.list_mcp_user_credentials.return_value = [
+            {
+                "server_id": "s-1",
+                "has_credential": True,
+                "oauth_enabled": False,
+                "drop_me": True,
+            }
+        ]
+        result = await src.server.list_mcp_user_credentials("standard")
+        assert "drop_me" not in result[0]
+
+
+class TestSetMCPUserCredential:
+    @pytest.mark.asyncio
+    async def test_non_oauth(self, mock_client):
+        mock_client.set_mcp_user_credential.return_value = {"ok": True}
+        await src.server.set_mcp_user_credential(server_id="s-1", credential="sk-x", save=True)
+        mock_client.set_mcp_user_credential.assert_awaited_once_with(
+            "s-1", False, "sk-x", True, None, None, None, None
+        )
+
+    @pytest.mark.asyncio
+    async def test_oauth(self, mock_client):
+        mock_client.set_mcp_user_credential.return_value = {"ok": True}
+        await src.server.set_mcp_user_credential(
+            server_id="s-1",
+            oauth=True,
+            access_token="at-x",
+            refresh_token="rt-x",
+            expires_in=3600,
+            scopes=["read"],
+        )
+        mock_client.set_mcp_user_credential.assert_awaited_once_with(
+            "s-1", True, None, None, "at-x", "rt-x", 3600, ["read"]
+        )
+
+
+class TestDeleteMCPUserCredential:
+    @pytest.mark.asyncio
+    async def test_non_oauth(self, mock_client):
+        mock_client.delete_mcp_user_credential.return_value = {"deleted": True}
+        await src.server.delete_mcp_user_credential("s-1")
+        mock_client.delete_mcp_user_credential.assert_awaited_once_with("s-1", False)
+
+    @pytest.mark.asyncio
+    async def test_oauth(self, mock_client):
+        mock_client.delete_mcp_user_credential.return_value = {"deleted": True}
+        await src.server.delete_mcp_user_credential("s-1", oauth=True)
+        mock_client.delete_mcp_user_credential.assert_awaited_once_with("s-1", True)
+
+
+class TestGetMCPOAuthUserCredentialStatus:
+    @pytest.mark.asyncio
+    async def test_passes_id(self, mock_client):
+        mock_client.get_mcp_oauth_user_credential_status.return_value = {"valid": True}
+        await src.server.get_mcp_oauth_user_credential_status("s-1")
+        mock_client.get_mcp_oauth_user_credential_status.assert_awaited_once_with("s-1")
+
+
+# ── MCP Gateway: utility ──
+
+
+class TestGetMCPClientIp:
+    @pytest.mark.asyncio
+    async def test_passthrough(self, mock_client):
+        mock_client.get_mcp_client_ip.return_value = {"client_ip": "10.0.0.1"}
+        result = await src.server.get_mcp_client_ip()
+        assert result == {"client_ip": "10.0.0.1"}
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client
