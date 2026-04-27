@@ -463,6 +463,20 @@ class TestRegenerateKey:
         )
 
 
+class TestSetKeyBlocked:
+    @pytest.mark.asyncio
+    async def test_block(self, mock_client):
+        mock_client.set_key_blocked.return_value = {"ok": True}
+        await src.server.set_key_blocked("sk-x", True)
+        mock_client.set_key_blocked.assert_awaited_once_with("sk-x", True)
+
+    @pytest.mark.asyncio
+    async def test_unblock(self, mock_client):
+        mock_client.set_key_blocked.return_value = {"ok": True}
+        await src.server.set_key_blocked("sk-x", False)
+        mock_client.set_key_blocked.assert_awaited_once_with("sk-x", False)
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

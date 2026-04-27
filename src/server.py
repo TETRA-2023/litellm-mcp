@@ -536,6 +536,19 @@ async def regenerate_key(
 
 
 @mcp.tool()
+async def set_key_blocked(key: str, blocked: bool) -> dict:
+    """Block or unblock a virtual key.
+
+    Routes to `POST /key/block` when `blocked=True`, else `POST /key/unblock`.
+
+    Args:
+        key: virtual key value.
+        blocked: True to block, False to unblock.
+    """
+    return await get_client().set_key_blocked(key, blocked)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

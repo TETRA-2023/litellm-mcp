@@ -548,3 +548,11 @@ class LiteLLMClient:
         return await self._request(
             "POST", f"/key/{key}/regenerate", json=body or None
         )
+
+    async def set_key_blocked(self, key: str, blocked: bool) -> dict:
+        """Block or unblock a virtual key.
+
+        Routes to `POST /key/block` when `blocked=True`, otherwise `POST /key/unblock`.
+        """
+        path = "/key/block" if blocked else "/key/unblock"
+        return await self._request("POST", path, json={"key": key})
