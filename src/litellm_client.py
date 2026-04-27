@@ -196,3 +196,7 @@ class LiteLLMClient:
     async def list_public_models(self) -> Any:
         """List models published to the public Model Hub (`GET /public/model_hub`)."""
         return await self._request("GET", "/public/model_hub")
+
+    async def get_public_hub_info(self) -> dict:
+        """Get Model Hub metadata: title, description, useful links (`GET /public/model_hub/info`)."""
+        return await self._request("GET", "/public/model_hub/info")

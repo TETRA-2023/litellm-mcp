@@ -181,6 +181,12 @@ async def list_public_models(verbosity: str = "standard") -> Any:
 
 
 @mcp.tool()
+async def get_public_hub_info() -> dict:
+    """Get Model Hub metadata — title, description, useful links (`GET /public/model_hub/info`)."""
+    return await get_client().get_public_hub_info()
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

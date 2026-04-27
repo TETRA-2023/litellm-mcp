@@ -154,6 +154,16 @@ class TestListPublicModels:
         mock_client.list_public_models.assert_awaited_once()
 
 
+class TestGetPublicHubInfo:
+    @pytest.mark.asyncio
+    async def test_passthrough(self, mock_client):
+        payload = {"title": "Tetra Models", "description": "...", "useful_links": {}}
+        mock_client.get_public_hub_info.return_value = payload
+        result = await src.server.get_public_hub_info()
+        assert result == payload
+        mock_client.get_public_hub_info.assert_awaited_once()
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client
