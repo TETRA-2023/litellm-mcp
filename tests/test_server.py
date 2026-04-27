@@ -174,6 +174,16 @@ class TestGetModelCostMap:
         mock_client.get_model_cost_map.assert_awaited_once()
 
 
+class TestMakeModelGroupPublic:
+    @pytest.mark.asyncio
+    async def test_passes_model_groups(self, mock_client):
+        mock_client.make_model_group_public.return_value = {"ok": True}
+        await src.server.make_model_group_public(["gpt-4o", "claude-opus-4-7"])
+        mock_client.make_model_group_public.assert_awaited_once_with(
+            ["gpt-4o", "claude-opus-4-7"]
+        )
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

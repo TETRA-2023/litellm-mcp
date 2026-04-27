@@ -204,3 +204,12 @@ class LiteLLMClient:
     async def get_model_cost_map(self) -> dict:
         """Get LiteLLM's static model cost / capability map (`GET /public/litellm_model_cost_map`)."""
         return await self._request("GET", "/public/litellm_model_cost_map")
+
+    async def make_model_group_public(self, model_groups: list[str]) -> dict:
+        """Publish model groups to the public Model Hub (`POST /model_group/make_public`).
+
+        Replaces (not appends) the current set of published groups with `model_groups`.
+        """
+        return await self._request(
+            "POST", "/model_group/make_public", json={"model_groups": model_groups}
+        )

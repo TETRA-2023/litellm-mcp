@@ -197,6 +197,18 @@ async def get_model_cost_map() -> dict:
 
 
 @mcp.tool()
+async def make_model_group_public(model_groups: list[str]) -> dict:
+    """Publish model groups to the public Model Hub (`POST /model_group/make_public`).
+
+    Replaces (not appends) the current set of published groups.
+
+    Args:
+        model_groups: list of model_name strings to publish.
+    """
+    return await get_client().make_model_group_public(model_groups)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 
