@@ -144,6 +144,16 @@ class TestDeleteModel:
         mock_client.delete_model.assert_awaited_once_with("abc-123")
 
 
+class TestListPublicModels:
+    @pytest.mark.asyncio
+    async def test_passthrough_unfiltered(self, mock_client):
+        payload = [{"model_group": "gpt-4o", "providers": ["openai"]}]
+        mock_client.list_public_models.return_value = payload
+        result = await src.server.list_public_models("full")
+        assert result == payload
+        mock_client.list_public_models.assert_awaited_once()
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

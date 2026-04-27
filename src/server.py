@@ -170,6 +170,17 @@ async def delete_model(model_id: str) -> dict:
 
 
 @mcp.tool()
+async def list_public_models(verbosity: str = "standard") -> Any:
+    """List models published to the public Model Hub (`GET /public/model_hub`).
+
+    Args:
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().list_public_models()
+    return _filter_response(payload, "public_hub", verbosity)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

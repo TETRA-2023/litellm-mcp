@@ -190,3 +190,9 @@ class LiteLLMClient:
         Note: the deployment id goes in the body as `{"id": ...}`, not the path.
         """
         return await self._request("POST", "/model/delete", json={"id": model_id})
+
+    # ── Model Hub operations ──
+
+    async def list_public_models(self) -> Any:
+        """List models published to the public Model Hub (`GET /public/model_hub`)."""
+        return await self._request("GET", "/public/model_hub")
