@@ -549,6 +549,19 @@ async def set_key_blocked(key: str, blocked: bool) -> dict:
 
 
 @mcp.tool()
+async def delete_keys(
+    keys: Optional[list[str]] = None,
+    key_aliases: Optional[list[str]] = None,
+) -> dict:
+    """Batch-delete virtual keys (`POST /key/delete`).
+
+    Provide either `keys` (raw values) or `key_aliases` (alias names); at
+    least one must be non-empty.
+    """
+    return await get_client().delete_keys(keys, key_aliases)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 

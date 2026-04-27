@@ -477,6 +477,20 @@ class TestSetKeyBlocked:
         mock_client.set_key_blocked.assert_awaited_once_with("sk-x", False)
 
 
+class TestDeleteKeys:
+    @pytest.mark.asyncio
+    async def test_by_keys(self, mock_client):
+        mock_client.delete_keys.return_value = {"deleted": 2}
+        await src.server.delete_keys(keys=["sk-1", "sk-2"])
+        mock_client.delete_keys.assert_awaited_once_with(["sk-1", "sk-2"], None)
+
+    @pytest.mark.asyncio
+    async def test_by_aliases(self, mock_client):
+        mock_client.delete_keys.return_value = {"deleted": 1}
+        await src.server.delete_keys(key_aliases=["prod-bot"])
+        mock_client.delete_keys.assert_awaited_once_with(None, ["prod-bot"])
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

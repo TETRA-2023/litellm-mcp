@@ -556,3 +556,20 @@ class LiteLLMClient:
         """
         path = "/key/block" if blocked else "/key/unblock"
         return await self._request("POST", path, json={"key": key})
+
+    async def delete_keys(
+        self,
+        keys: Optional[list[str]] = None,
+        key_aliases: Optional[list[str]] = None,
+    ) -> dict:
+        """Batch-delete virtual keys (`POST /key/delete`).
+
+        Provide either `keys` (raw key values) or `key_aliases` (alias names);
+        at least one must be non-empty.
+        """
+        body: dict[str, Any] = {}
+        if keys is not None:
+            body["keys"] = keys
+        if key_aliases is not None:
+            body["key_aliases"] = key_aliases
+        return await self._request("POST", "/key/delete", json=body)
