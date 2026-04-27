@@ -4,8 +4,10 @@ MCP server for [LiteLLM](https://github.com/BerriAI/litellm) proxy administratio
 
 **Upstream API reference:** [LiteLLM proxy Swagger](https://litellm-api.up.railway.app/).
 
-Foundation slice (US #534): exposes a single tool — `list_models` — against a running LiteLLM proxy.
-Subsequent slices add models/credentials/keys/users/spend/teams/guardrails/routing/passthrough/MCP-gateway tools.
+Foundation (US #534) shipped `list_models`. Admin slice (US #535) adds 32 tools
+covering models, model hub, model access groups, credentials, and virtual keys.
+Subsequent slices add identity/teams/spend/execution (#536), governance and
+passthrough (#538), and the MCP-of-MCPs gateway (#558).
 
 ## Setup
 
@@ -68,9 +70,69 @@ Add to your Claude Code MCP settings (project-scoped `.mcp.json` recommended):
 
 ## Tools
 
-| Tool | Description |
-|------|-------------|
-| `list_models` | List models exposed by the proxy (`GET /v1/models`). Verbosity: `minimal` / `standard` / `full`. |
+All tools accept a `verbosity` arg (`minimal` / `standard` / `full`) where it makes sense; see `RESPONSE_FIELDS` in `src/server.py` for the shapes. The `credential` shape deliberately omits `credential_values` at `standard` to avoid leaking secrets into agent transcripts — use `full` to inspect.
+
+### Models (6)
+
+| Tool | Endpoint |
+|------|----------|
+| `list_models` | `GET /v1/models` |
+| `get_model` | `GET /v1/models/{model_id}` |
+| `get_model_info` | `GET /model/info` (admin, full deployment details) |
+| `add_model` | `POST /model/new` |
+| `update_model` | `PATCH /model/{model_id}/update` |
+| `delete_model` | `POST /model/delete` |
+
+### Model Hub (5)
+
+| Tool | Endpoint |
+|------|----------|
+| `list_public_models` | `GET /public/model_hub` |
+| `get_public_hub_info` | `GET /public/model_hub/info` |
+| `get_model_cost_map` | `GET /public/litellm_model_cost_map` |
+| `make_model_group_public` | `POST /model_group/make_public` |
+| `update_model_hub_links` | `POST /model_hub/update_useful_links` |
+
+### Model Access Groups (5)
+
+| Tool | Endpoint |
+|------|----------|
+| `list_model_access_groups` | `GET /access_group/list` |
+| `get_model_access_group` | `GET /access_group/{access_group}/info` |
+| `create_model_access_group` | `POST /access_group/new` |
+| `update_model_access_group` | `PUT /access_group/{access_group}/update` |
+| `delete_model_access_group` | `DELETE /access_group/{access_group}/delete` |
+
+### Credentials (6)
+
+| Tool | Endpoint |
+|------|----------|
+| `list_credentials` | `GET /credentials` |
+| `get_credential` | `GET /credentials/by_name/{credential_name}` |
+| `get_credential_by_model` | `GET /credentials/by_model/{model_id}` |
+| `create_credential` | `POST /credentials` |
+| `update_credential` | `PATCH /credentials/{credential_name}` |
+| `delete_credential` | `DELETE /credentials/{credential_name}` |
+
+### Keys (11)
+
+| Tool | Endpoint |
+|------|----------|
+| `list_keys` | `GET /key/list` |
+| `list_key_aliases` | `GET /key/aliases` |
+| `get_key_info` | `GET /key/info` |
+| `generate_key` | `POST /key/generate` |
+| `generate_service_account_key` | `POST /key/service-account/generate` |
+| `update_key` | `POST /key/update` |
+| `regenerate_key` | `POST /key/{key}/regenerate` |
+| `set_key_blocked(blocked: bool)` | `POST /key/block` ∣ `POST /key/unblock` |
+| `delete_keys` | `POST /key/delete` |
+| `reset_key_spend` | `POST /key/{key}/reset_spend` |
+| `key_health` | `POST /key/health` |
+
+`generate_key`, `generate_service_account_key`, `update_key`, and `regenerate_key`
+expose the most common ~12 fields as named args; pass any other upstream field
+via the `extras: dict` argument (merged into the request body).
 
 ## Development
 
