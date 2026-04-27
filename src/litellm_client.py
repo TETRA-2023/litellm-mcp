@@ -1,0 +1,129 @@
+"""LiteLLM proxy HTTP client."""
+
+import logging
+from typing import Any, Optional
+
+import httpx
+
+logger = logging.getLogger(__name__)
+
+
+class LiteLLMAPIError(Exception):
+    """Raised when the LiteLLM proxy returns an error."""
+
+    def __init__(self, message: str, status_code: Optional[int] = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+_RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
+
+
+class LiteLLMClient:
+    """Async client for LiteLLM proxy admin and OpenAI-compatible endpoints.
+
+    - Auth: `Authorization: Bearer <key>` (master or virtual key).
+    - Retry: simple bounded retry on transient HTTP errors.
+    - Error mapping: 401/403/404 raise typed errors with status code preserved.
+    """
+
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        timeout: float = 30.0,
+        max_retries: int = 2,
+    ):
+        self.base_url = base_url.rstrip("/")
+        self.max_retries = max_retries
+        transport = httpx.AsyncHTTPTransport(retries=0)
+        self._client = httpx.AsyncClient(
+            base_url=self.base_url,
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=timeout,
+            transport=transport,
+        )
+
+    async def close(self) -> None:
+        await self._client.aclose()
+
+    def _check_response(self, response: httpx.Response) -> None:
+        if response.status_code == 401:
+            raise LiteLLMAPIError("Unauthorized: invalid or missing API key", 401)
+        if response.status_code == 403:
+            raise LiteLLMAPIError("Forbidden: insufficient permissions", 403)
+        if response.status_code == 404:
+            raise LiteLLMAPIError("Not found", 404)
+        if response.status_code >= 400:
+            try:
+                payload = response.json()
+                detail = payload.get("error", payload)
+                message = (
+                    detail.get("message") if isinstance(detail, dict) else str(detail)
+                ) or response.text
+            except ValueError:
+                message = response.text or f"HTTP {response.status_code}"
+            raise LiteLLMAPIError(message, response.status_code)
+
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Optional[dict] = None,
+        json: Optional[dict] = None,
+    ) -> Any:
+        attempt = 0
+        last_exc: Optional[Exception] = None
+        while attempt <= self.max_retries:
+            try:
+                response = await self._client.request(method, path, params=params, json=json)
+            except httpx.TransportError as exc:
+                last_exc = exc
+                logger.warning(
+                    "LiteLLM transport error on %s %s (attempt %d): %s",
+                    method,
+                    path,
+                    attempt + 1,
+                    exc,
+                )
+                attempt += 1
+                continue
+
+            if response.status_code in _RETRYABLE_STATUS and attempt < self.max_retries:
+                logger.warning(
+                    "LiteLLM %s %s -> %d (retrying)",
+                    method,
+                    path,
+                    response.status_code,
+                )
+                attempt += 1
+                continue
+
+            self._check_response(response)
+            if not response.content:
+                return None
+            try:
+                return response.json()
+            except ValueError:
+                return response.text
+
+        raise LiteLLMAPIError(
+            f"LiteLLM {method} {path} failed after {self.max_retries + 1} attempts: {last_exc}"
+        )
+
+    # ── Model operations ──
+
+    async def list_models(self) -> list[dict]:
+        """List models exposed by the LiteLLM proxy.
+
+        Calls the OpenAI-compatible `GET /v1/models` endpoint, which returns
+        `{"data": [{"id", "object", "created", "owned_by"}, ...], "object": "list"}`.
+        Returns the unwrapped `data` array.
+        """
+        payload = await self._request("GET", "/v1/models")
+        if isinstance(payload, dict) and "data" in payload:
+            return payload["data"]
+        if isinstance(payload, list):
+            return payload
+        return []

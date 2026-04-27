@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=42.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "litellm-mcp"
+version = "0.1.0"
+description = "MCP server for LiteLLM proxy administration and execution"
+requires-python = ">=3.12"
+authors = [{ name = "TETRA" }]
+license = { text = "MIT" }
+dependencies = [
+    "mcp[cli]>=0.1.0",
+    "httpx>=0.28.0",
+    "pydantic>=2.4.0",
+    "pydantic-settings>=2.0.0",
+    "python-dotenv>=0.15.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.8.0",
+    "pre-commit>=3.0.0",
+]
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+markers = [
+    "unit: Run unit tests",
+    "integration: Run integration tests",
+]
+addopts = "-v"
+asyncio_mode = "auto"
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+branch = "master"
+commit_message = "chore(release): v{version}"
+build_command = ""
+
+[tool.semantic_release.commit_parser_options]
+allowed_tags = ["build", "chore", "ci", "docs", "feat", "fix", "perf", "style", "refactor", "test"]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]
+
+[tool.semantic_release.remote]
+type = "github"
+token = { env = "GH_TOKEN" }
+
+[tool.semantic_release.changelog.default_templates]
+changelog_file = "CHANGELOG.md"
+
+[dependency-groups]
+dev = [
+    "python-semantic-release>=10.5.3",
+]
