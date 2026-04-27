@@ -290,6 +290,33 @@ class TestGetCredentialByModel:
         mock_client.get_credential_by_model.assert_awaited_once_with("abc-123")
 
 
+class TestCreateCredential:
+    @pytest.mark.asyncio
+    async def test_with_values(self, mock_client):
+        mock_client.create_credential.return_value = {"ok": True}
+        await src.server.create_credential(
+            "openai-prod",
+            {"custom_llm_provider": "openai"},
+            credential_values={"api_key": "sk-x"},
+        )
+        mock_client.create_credential.assert_awaited_once_with(
+            "openai-prod",
+            {"custom_llm_provider": "openai"},
+            {"api_key": "sk-x"},
+            None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_with_model_id(self, mock_client):
+        mock_client.create_credential.return_value = {"ok": True}
+        await src.server.create_credential(
+            "openai-prod", {"custom_llm_provider": "openai"}, model_id="abc-123"
+        )
+        mock_client.create_credential.assert_awaited_once_with(
+            "openai-prod", {"custom_llm_provider": "openai"}, None, "abc-123"
+        )
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

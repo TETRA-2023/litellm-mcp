@@ -290,3 +290,25 @@ class LiteLLMClient:
     async def get_credential_by_model(self, model_id: str) -> dict:
         """Get the credential bound to a deployment (`GET /credentials/by_model/{model_id}`)."""
         return await self._request("GET", f"/credentials/by_model/{model_id}")
+
+    async def create_credential(
+        self,
+        credential_name: str,
+        credential_info: dict,
+        credential_values: Optional[dict] = None,
+        model_id: Optional[str] = None,
+    ) -> dict:
+        """Create a credential (`POST /credentials`).
+
+        Either provide raw `credential_values` (e.g. `{"api_key": "sk-..."}`) or
+        bind to an existing deployment via `model_id`.
+        """
+        body: dict[str, Any] = {
+            "credential_name": credential_name,
+            "credential_info": credential_info,
+        }
+        if credential_values is not None:
+            body["credential_values"] = credential_values
+        if model_id is not None:
+            body["model_id"] = model_id
+        return await self._request("POST", "/credentials", json=body)

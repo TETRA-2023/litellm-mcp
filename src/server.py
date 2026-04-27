@@ -320,6 +320,26 @@ async def get_credential_by_model(model_id: str, verbosity: str = "standard") ->
 
 
 @mcp.tool()
+async def create_credential(
+    credential_name: str,
+    credential_info: dict,
+    credential_values: Optional[dict] = None,
+    model_id: Optional[str] = None,
+) -> dict:
+    """Create a credential (`POST /credentials`).
+
+    Args:
+        credential_name: identifier for the new credential.
+        credential_info: metadata dict (e.g. `{"custom_llm_provider": "openai"}`).
+        credential_values: raw credential values (e.g. `{"api_key": "sk-..."}`).
+        model_id: bind to existing deployment instead of providing values.
+    """
+    return await get_client().create_credential(
+        credential_name, credential_info, credential_values, model_id
+    )
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 
