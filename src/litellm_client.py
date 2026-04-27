@@ -222,3 +222,9 @@ class LiteLLMClient:
         return await self._request(
             "POST", "/model_hub/update_useful_links", json={"useful_links": useful_links}
         )
+
+    # ── Model Access Group operations ──
+
+    async def list_model_access_groups(self) -> Any:
+        """List all model access groups (`GET /access_group/list`)."""
+        return await self._request("GET", "/access_group/list")

@@ -194,6 +194,16 @@ class TestUpdateModelHubLinks:
         )
 
 
+class TestListModelAccessGroups:
+    @pytest.mark.asyncio
+    async def test_passthrough(self, mock_client):
+        payload = [{"access_group": "engineering", "models": ["gpt-4o"]}]
+        mock_client.list_model_access_groups.return_value = payload
+        result = await src.server.list_model_access_groups("full")
+        assert result == payload
+        mock_client.list_model_access_groups.assert_awaited_once()
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

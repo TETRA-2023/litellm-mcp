@@ -220,6 +220,17 @@ async def update_model_hub_links(useful_links: dict) -> dict:
 
 
 @mcp.tool()
+async def list_model_access_groups(verbosity: str = "standard") -> Any:
+    """List all model access groups (`GET /access_group/list`).
+
+    Args:
+        verbosity: 'minimal' / 'standard' / 'full'.
+    """
+    payload = await get_client().list_model_access_groups()
+    return _filter_response(payload, "access_group", verbosity)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 
