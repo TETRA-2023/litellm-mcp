@@ -1588,3 +1588,386 @@ class LiteLLMClient:
         if model_info is not None:
             body["model_info"] = model_info
         return await self._request("POST", "/health/test_connection", json=body)
+
+    # ── MCP Gateway operations ──
+    #
+    # The LiteLLM proxy can act as an MCP-of-MCPs: register upstream HTTP-transport
+    # MCP servers and broker tool listing / invocation through the proxy. These
+    # tools wrap the `/v1/mcp/*` and `/mcp-rest/*` admin surfaces.
+
+    @staticmethod
+    def _build_mcp_server_body(
+        server_id: Optional[str],
+        server_name: Optional[str],
+        alias: Optional[str],
+        description: Optional[str],
+        transport: Optional[str],
+        url: Optional[str],
+        auth_type: Optional[str],
+        spec_path: Optional[str],
+        mcp_info: Optional[dict],
+        mcp_access_groups: Optional[list[str]],
+        allowed_tools: Optional[list[str]],
+        credentials: Optional[dict],
+        extras: Optional[dict],
+    ) -> dict[str, Any]:
+        """Build a NewMCPServerRequest / UpdateMCPServerRequest body."""
+        body = {
+            k: v
+            for k, v in {
+                "server_id": server_id,
+                "server_name": server_name,
+                "alias": alias,
+                "description": description,
+                "transport": transport,
+                "url": url,
+                "auth_type": auth_type,
+                "spec_path": spec_path,
+                "mcp_info": mcp_info,
+                "mcp_access_groups": mcp_access_groups,
+                "allowed_tools": allowed_tools,
+                "credentials": credentials,
+            }.items()
+            if v is not None
+        }
+        if extras:
+            body.update(extras)
+        return body
+
+    async def list_mcp_servers(self, team_id: Optional[str] = None) -> Any:
+        """List registered upstream MCP servers (`GET /v1/mcp/server`).
+
+        `team_id` optionally narrows to servers visible to a single team.
+        """
+        params = {"team_id": team_id} if team_id else None
+        return await self._request("GET", "/v1/mcp/server", params=params)
+
+    async def get_mcp_server(self, server_id: str) -> dict:
+        """Get a single MCP server by id (`GET /v1/mcp/server/{server_id}`)."""
+        return await self._request("GET", f"/v1/mcp/server/{server_id}")
+
+    async def add_mcp_server(
+        self,
+        transport: str,
+        server_name: Optional[str] = None,
+        alias: Optional[str] = None,
+        description: Optional[str] = None,
+        url: Optional[str] = None,
+        auth_type: Optional[str] = None,
+        spec_path: Optional[str] = None,
+        mcp_info: Optional[dict] = None,
+        mcp_access_groups: Optional[list[str]] = None,
+        allowed_tools: Optional[list[str]] = None,
+        credentials: Optional[dict] = None,
+        server_id: Optional[str] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Admin-register a new upstream MCP server (`POST /v1/mcp/server`).
+
+        `transport` is required (`http`, `sse`, `stdio`). For HTTP/SSE provide
+        `url`; for stdio you'd use upstream `command` / `args` / `env` fields
+        via `extras` (TETRA's gateway brokers HTTP-transport upstreams). Pass
+        any of the ~30 NewMCPServerRequest fields not surfaced as named args
+        through `extras` (e.g. `static_headers`, `extra_headers`,
+        `tool_name_to_display_name`, `oauth2_flow`).
+        """
+        body = self._build_mcp_server_body(
+            server_id,
+            server_name,
+            alias,
+            description,
+            transport,
+            url,
+            auth_type,
+            spec_path,
+            mcp_info,
+            mcp_access_groups,
+            allowed_tools,
+            credentials,
+            extras,
+        )
+        return await self._request("POST", "/v1/mcp/server", json=body)
+
+    async def update_mcp_server(
+        self,
+        server_id: str,
+        server_name: Optional[str] = None,
+        alias: Optional[str] = None,
+        description: Optional[str] = None,
+        transport: Optional[str] = None,
+        url: Optional[str] = None,
+        auth_type: Optional[str] = None,
+        spec_path: Optional[str] = None,
+        mcp_info: Optional[dict] = None,
+        mcp_access_groups: Optional[list[str]] = None,
+        allowed_tools: Optional[list[str]] = None,
+        credentials: Optional[dict] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Admin-update an MCP server (`PUT /v1/mcp/server`).
+
+        `server_id` identifies the row and is sent in the body, not the path —
+        UpdateMCPServerRequest treats it as required.
+        """
+        body = self._build_mcp_server_body(
+            server_id,
+            server_name,
+            alias,
+            description,
+            transport,
+            url,
+            auth_type,
+            spec_path,
+            mcp_info,
+            mcp_access_groups,
+            allowed_tools,
+            credentials,
+            extras,
+        )
+        return await self._request("PUT", "/v1/mcp/server", json=body)
+
+    async def delete_mcp_server(self, server_id: str) -> dict:
+        """Delete an MCP server (`DELETE /v1/mcp/server/{server_id}`)."""
+        return await self._request("DELETE", f"/v1/mcp/server/{server_id}")
+
+    async def register_mcp_server(
+        self,
+        transport: str,
+        server_name: Optional[str] = None,
+        alias: Optional[str] = None,
+        description: Optional[str] = None,
+        url: Optional[str] = None,
+        auth_type: Optional[str] = None,
+        spec_path: Optional[str] = None,
+        mcp_info: Optional[dict] = None,
+        mcp_access_groups: Optional[list[str]] = None,
+        allowed_tools: Optional[list[str]] = None,
+        credentials: Optional[dict] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Self-register an MCP server (`POST /v1/mcp/server/register`).
+
+        Distinct from `add_mcp_server`: `register` is the user-facing submission
+        path that creates a server in `pending` approval state, awaiting an
+        admin's `approve_mcp_server_submission`. `add_mcp_server` is the admin
+        path that creates servers in approved state directly.
+        """
+        body = self._build_mcp_server_body(
+            None,
+            server_name,
+            alias,
+            description,
+            transport,
+            url,
+            auth_type,
+            spec_path,
+            mcp_info,
+            mcp_access_groups,
+            allowed_tools,
+            credentials,
+            extras,
+        )
+        return await self._request("POST", "/v1/mcp/server/register", json=body)
+
+    async def list_mcp_server_submissions(self) -> Any:
+        """List pending MCP server submissions (`GET /v1/mcp/server/submissions`)."""
+        return await self._request("GET", "/v1/mcp/server/submissions")
+
+    async def approve_mcp_server_submission(self, server_id: str) -> dict:
+        """Approve a pending MCP submission (`PUT /v1/mcp/server/{id}/approve`)."""
+        return await self._request("PUT", f"/v1/mcp/server/{server_id}/approve")
+
+    async def reject_mcp_server_submission(
+        self, server_id: str, review_notes: Optional[str] = None
+    ) -> dict:
+        """Reject a pending MCP submission (`PUT /v1/mcp/server/{id}/reject`).
+
+        Optional `review_notes` is captured per upstream `RejectMCPServerRequest`.
+        """
+        body = {"review_notes": review_notes} if review_notes is not None else {}
+        return await self._request("PUT", f"/v1/mcp/server/{server_id}/reject", json=body)
+
+    async def check_mcp_servers_health(self, server_ids: Optional[str] = None) -> dict:
+        """Probe upstream MCP server health (`GET /v1/mcp/server/health`).
+
+        `server_ids` is an upstream-comma-separated string (not an array) to
+        narrow the probe to specific servers.
+        """
+        params = {"server_ids": server_ids} if server_ids else None
+        return await self._request("GET", "/v1/mcp/server/health", params=params)
+
+    async def list_mcp_tools(self) -> Any:
+        """List tools across all registered MCP servers (`GET /v1/mcp/tools`)."""
+        return await self._request("GET", "/v1/mcp/tools")
+
+    async def list_mcp_tools_rest(self, server_id: Optional[str] = None) -> Any:
+        """List tools (REST shape) for a registered MCP server (`GET /mcp-rest/tools/list`).
+
+        Lighter-weight than `list_mcp_tools`; per-server. `server_id` is a query
+        param.
+        """
+        params = {"server_id": server_id} if server_id else None
+        return await self._request("GET", "/mcp-rest/tools/list", params=params)
+
+    async def call_mcp_tool(
+        self,
+        server_id: str,
+        name: str,
+        arguments: Optional[dict] = None,
+    ) -> Any:
+        """Invoke a tool on a registered MCP server (`POST /mcp-rest/tools/call`).
+
+        Body shape: `{"server_id": ..., "name": ..., "arguments": {...}}`.
+        Upstream returns the provider-shaped tool response (typically the MCP
+        `tools/call` result envelope: `{"content": [...], "isError": bool}`).
+        """
+        body: dict[str, Any] = {"server_id": server_id, "name": name}
+        if arguments is not None:
+            body["arguments"] = arguments
+        return await self._request("POST", "/mcp-rest/tools/call", json=body)
+
+    async def test_mcp_connection(
+        self,
+        transport: str,
+        url: Optional[str] = None,
+        auth_type: Optional[str] = None,
+        spec_path: Optional[str] = None,
+        credentials: Optional[dict] = None,
+        extras: Optional[dict] = None,
+    ) -> dict:
+        """Test a candidate MCP server connection (`POST /mcp-rest/test/connection`).
+
+        Body is a NewMCPServerRequest — pass the same fields you would to
+        `add_mcp_server`. Useful for validating provider URL + auth before
+        registering.
+        """
+        body = self._build_mcp_server_body(
+            None,
+            None,
+            None,
+            None,
+            transport,
+            url,
+            auth_type,
+            spec_path,
+            None,
+            None,
+            None,
+            credentials,
+            extras,
+        )
+        return await self._request("POST", "/mcp-rest/test/connection", json=body)
+
+    async def discover_mcp_servers(
+        self,
+        query: Optional[str] = None,
+        category: Optional[str] = None,
+    ) -> Any:
+        """Search the public MCP server registry (`GET /v1/mcp/discover`).
+
+        Both filters are optional query params.
+        """
+        params = {k: v for k, v in {"query": query, "category": category}.items() if v is not None}
+        return await self._request("GET", "/v1/mcp/discover", params=params or None)
+
+    async def get_mcp_openapi_registry(self) -> Any:
+        """Get the OpenAPI registry of MCP servers (`GET /v1/mcp/openapi-registry`)."""
+        return await self._request("GET", "/v1/mcp/openapi-registry")
+
+    async def get_mcp_registry(self) -> Any:
+        """Get the MCP servers registry JSON (`GET /v1/mcp/registry.json`)."""
+        return await self._request("GET", "/v1/mcp/registry.json")
+
+    async def list_mcp_access_groups(self) -> Any:
+        """List MCP access groups (`GET /v1/mcp/access_groups`).
+
+        Distinct from model access groups (`/access_group/list`, in #535) and
+        unified user access groups (`/v1/unified_access_group`, in #536) — these
+        gate keys/teams against MCP servers specifically.
+        """
+        return await self._request("GET", "/v1/mcp/access_groups")
+
+    async def make_mcp_servers_public(self, mcp_server_ids: list[str]) -> dict:
+        """Publish MCP servers to the public hub (`POST /v1/mcp/make_public`).
+
+        Body is `{"mcp_server_ids": [...]}` per upstream `MakeMCPServersPublicRequest`.
+        """
+        return await self._request(
+            "POST", "/v1/mcp/make_public", json={"mcp_server_ids": mcp_server_ids}
+        )
+
+    async def get_public_mcp_hub(self) -> Any:
+        """Get the public MCP hub catalog (`GET /public/mcp_hub`)."""
+        return await self._request("GET", "/public/mcp_hub")
+
+    async def list_mcp_user_credentials(self) -> Any:
+        """List the caller's stored MCP user credentials (`GET /v1/mcp/user-credentials`).
+
+        Returns one entry per server the caller has provided credentials for;
+        credential values are not included.
+        """
+        return await self._request("GET", "/v1/mcp/user-credentials")
+
+    async def set_mcp_user_credential(
+        self,
+        server_id: str,
+        oauth: bool = False,
+        credential: Optional[str] = None,
+        save: Optional[bool] = None,
+        access_token: Optional[str] = None,
+        refresh_token: Optional[str] = None,
+        expires_in: Optional[int] = None,
+        scopes: Optional[list[str]] = None,
+    ) -> dict:
+        """Set the caller's user credential for an MCP server.
+
+        Routes to `POST /v1/mcp/server/{server_id}/oauth-user-credential` when
+        `oauth=True`, else `POST /v1/mcp/server/{server_id}/user-credential`.
+
+        Non-oauth body (`MCPUserCredentialRequest`): `credential` (required),
+        `save` (optional bool).
+
+        OAuth body (`MCPOAuthUserCredentialRequest`): `access_token` (required),
+        `refresh_token`, `expires_in`, `scopes`.
+        """
+        if oauth:
+            body = self._build_body(
+                {
+                    "access_token": access_token,
+                    "refresh_token": refresh_token,
+                    "expires_in": expires_in,
+                    "scopes": scopes,
+                }
+            )
+            path = f"/v1/mcp/server/{server_id}/oauth-user-credential"
+        else:
+            body = self._build_body({"credential": credential, "save": save})
+            path = f"/v1/mcp/server/{server_id}/user-credential"
+        return await self._request("POST", path, json=body)
+
+    async def delete_mcp_user_credential(self, server_id: str, oauth: bool = False) -> dict:
+        """Delete the caller's user credential for an MCP server.
+
+        Routes to `DELETE /v1/mcp/server/{server_id}/oauth-user-credential`
+        when `oauth=True`, else `DELETE /v1/mcp/server/{server_id}/user-credential`.
+        """
+        suffix = "oauth-user-credential" if oauth else "user-credential"
+        return await self._request("DELETE", f"/v1/mcp/server/{server_id}/{suffix}")
+
+    async def get_mcp_oauth_user_credential_status(self, server_id: str) -> dict:
+        """Get OAuth credential status for an MCP server (`GET /v1/mcp/server/{id}/oauth-user-credential/status`).
+
+        Returns whether the caller has a valid OAuth credential for the server
+        and (optionally) when it expires.
+        """
+        return await self._request(
+            "GET", f"/v1/mcp/server/{server_id}/oauth-user-credential/status"
+        )
+
+    async def get_mcp_client_ip(self) -> dict:
+        """Get the caller's resolved client IP (`GET /v1/mcp/network/client-ip`).
+
+        Useful for diagnosing IP-allowlist / proxy-header issues without
+        bouncing through an external service.
+        """
+        return await self._request("GET", "/v1/mcp/network/client-ip")

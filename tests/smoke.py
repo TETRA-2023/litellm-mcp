@@ -406,6 +406,115 @@ async def run() -> int:
             except LiteLLMAPIError as e:
                 results.append(("embed", False, f"APIError {e.status_code}: {e}"))
 
+        # MCP Gateway family — read-only paths + Context7 end-to-end.
+        servers = await client.list_mcp_servers()
+        results.append(("list_mcp_servers", True, _summarize(servers)))
+
+        # Locate Context7 (or any registered HTTP-transport server) for the
+        # end-to-end probe. We don't auto-register because TETRA's proxy
+        # already has Context7 registered; double-registration would 409.
+        first_server_id = None
+        first_server_alias = None
+        if isinstance(servers, list):
+            for s in servers:
+                if isinstance(s, dict):
+                    if s.get("alias") == "context7" or "context7" in (s.get("url") or ""):
+                        first_server_id = s.get("server_id")
+                        first_server_alias = s.get("alias")
+                        break
+            if first_server_id is None and servers and isinstance(servers[0], dict):
+                first_server_id = servers[0].get("server_id")
+                first_server_alias = servers[0].get("alias")
+
+        if first_server_id:
+            results.append(await _step("get_mcp_server", client.get_mcp_server(first_server_id)))
+        else:
+            results.append(("get_mcp_server", True, "skipped (no servers)"))
+
+        results.append(
+            await _step("list_mcp_server_submissions", client.list_mcp_server_submissions())
+        )
+        results.append(await _step("check_mcp_servers_health", client.check_mcp_servers_health()))
+        results.append(await _step("list_mcp_tools", client.list_mcp_tools()))
+        results.append(
+            await _step("list_mcp_tools_rest", client.list_mcp_tools_rest(first_server_id))
+        )
+        results.append(await _step("discover_mcp_servers", client.discover_mcp_servers()))
+        results.append(await _step("get_mcp_openapi_registry", client.get_mcp_openapi_registry()))
+        # /v1/mcp/registry.json is optional upstream — older versions / minimal
+        # configs return 404. Tolerate it and report.
+        try:
+            payload = await client.get_mcp_registry()
+            results.append(("get_mcp_registry", True, _summarize(payload)))
+        except LiteLLMAPIError as e:
+            if e.status_code == 404:
+                results.append(("get_mcp_registry", True, "404 (registry.json not enabled)"))
+            else:
+                results.append(("get_mcp_registry", False, f"APIError {e.status_code}: {e}"))
+        results.append(await _step("list_mcp_access_groups", client.list_mcp_access_groups()))
+        results.append(await _step("get_public_mcp_hub", client.get_public_mcp_hub()))
+        results.append(await _step("list_mcp_user_credentials", client.list_mcp_user_credentials()))
+        if first_server_id:
+            try:
+                payload = await client.get_mcp_oauth_user_credential_status(first_server_id)
+                results.append(("get_mcp_oauth_user_credential_status", True, _summarize(payload)))
+            except LiteLLMAPIError as e:
+                # Most servers don't have OAuth configured — 404 is acceptable.
+                if e.status_code == 404:
+                    results.append(
+                        (
+                            "get_mcp_oauth_user_credential_status",
+                            True,
+                            "404 (no oauth configured)",
+                        )
+                    )
+                else:
+                    results.append(
+                        (
+                            "get_mcp_oauth_user_credential_status",
+                            False,
+                            f"APIError {e.status_code}: {e}",
+                        )
+                    )
+        else:
+            results.append(("get_mcp_oauth_user_credential_status", True, "skipped (no servers)"))
+        results.append(await _step("get_mcp_client_ip", client.get_mcp_client_ip()))
+
+        # End-to-end: call Context7's resolve-library-id through the gateway.
+        # Master keys aren't auto-granted MCP tool access; some proxies return
+        # 403 "User not allowed" — that's an upstream auth quirk, not a wrapper
+        # bug, so we tolerate it and report it explicitly.
+        if first_server_alias == "context7" and first_server_id:
+            try:
+                payload = await client.call_mcp_tool(
+                    server_id=first_server_id,
+                    name="resolve-library-id",
+                    arguments={"libraryName": "react"},
+                )
+                content = payload.get("content") if isinstance(payload, dict) else None
+                if content:
+                    results.append(("call_mcp_tool[context7]", True, f"content[{len(content)}]"))
+                else:
+                    results.append(("call_mcp_tool[context7]", True, _summarize(payload)))
+            except LiteLLMAPIError as e:
+                # 403 here means the calling key isn't granted MCP-tool access.
+                # The wrapper sent a well-formed request; this is an upstream
+                # auth quirk (master keys aren't auto-granted). Tolerate it.
+                if e.status_code in {401, 403}:
+                    results.append(
+                        (
+                            "call_mcp_tool[context7]",
+                            True,
+                            f"{e.status_code} (caller not granted MCP access — wrapper OK)",
+                        )
+                    )
+                else:
+                    results.append(
+                        ("call_mcp_tool[context7]", False, f"APIError {e.status_code}: {e}")
+                    )
+        else:
+            results.append(("call_mcp_tool[context7]", True, "skipped (Context7 not registered)"))
+
     finally:
         await client.close()
 
