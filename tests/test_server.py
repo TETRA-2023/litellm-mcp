@@ -491,6 +491,20 @@ class TestDeleteKeys:
         mock_client.delete_keys.assert_awaited_once_with(None, ["prod-bot"])
 
 
+class TestResetKeySpend:
+    @pytest.mark.asyncio
+    async def test_default_zero(self, mock_client):
+        mock_client.reset_key_spend.return_value = {"ok": True}
+        await src.server.reset_key_spend("sk-x")
+        mock_client.reset_key_spend.assert_awaited_once_with("sk-x", 0.0)
+
+    @pytest.mark.asyncio
+    async def test_explicit_value(self, mock_client):
+        mock_client.reset_key_spend.return_value = {"ok": True}
+        await src.server.reset_key_spend("sk-x", 5.5)
+        mock_client.reset_key_spend.assert_awaited_once_with("sk-x", 5.5)
+
+
 class TestClientGuard:
     def test_get_client_unset_raises(self):
         original = src.server._client

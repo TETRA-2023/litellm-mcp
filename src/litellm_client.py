@@ -573,3 +573,13 @@ class LiteLLMClient:
         if key_aliases is not None:
             body["key_aliases"] = key_aliases
         return await self._request("POST", "/key/delete", json=body)
+
+    async def reset_key_spend(self, key: str, reset_to: float = 0.0) -> dict:
+        """Reset a key's accumulated spend (`POST /key/{key}/reset_spend`).
+
+        `reset_to` defaults to 0.0 (typical use); pass a positive value to set
+        a starting balance.
+        """
+        return await self._request(
+            "POST", f"/key/{key}/reset_spend", json={"reset_to": reset_to}
+        )

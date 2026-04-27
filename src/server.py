@@ -562,6 +562,17 @@ async def delete_keys(
 
 
 @mcp.tool()
+async def reset_key_spend(key: str, reset_to: float = 0.0) -> dict:
+    """Reset a key's accumulated spend (`POST /key/{key}/reset_spend`).
+
+    Args:
+        key: virtual key value.
+        reset_to: target spend (defaults to 0.0).
+    """
+    return await get_client().reset_key_spend(key, reset_to)
+
+
+@mcp.tool()
 async def get_model_info(litellm_model_id: Optional[str] = None) -> dict:
     """Get admin-side model info — full deployment details (`GET /model/info`).
 
