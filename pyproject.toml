@@ -51,7 +51,7 @@ asyncio_mode = "auto"
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
-branch = "master"
+branch = "main"
 commit_message = "chore(release): v{version}"
 build_command = ""
 
