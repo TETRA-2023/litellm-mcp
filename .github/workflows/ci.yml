@@ -7,6 +7,24 @@ on:
     branches: [master, main]
 
 jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          VERSION=8.30.1
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: Scan repo (full history)
+        run: gitleaks detect --no-banner --redact --verbose
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -49,7 +67,7 @@ jobs:
         run: uv run ruff format --check src/ tests/
 
   docker:
-    needs: [test, lint]
+    needs: [secrets, test, lint]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -82,28 +100,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract version from pyproject.toml
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        id: version
-        run: |
-          VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
-          echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+' || { echo "::error::Invalid version: $VERSION"; exit 1; }
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Build and push image
+      - name: Build and push image (:latest)
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: docker/build-push-action@v7
         with:
           context: .
           push: true
-          tags: |
-            ${{ steps.repo.outputs.image }}:latest
-            ${{ steps.repo.outputs.image }}:${{ steps.version.outputs.version }}
+          tags: ${{ steps.repo.outputs.image }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   release:
-    needs: [test, lint]
+    needs: [secrets, test, lint]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     concurrency: release
