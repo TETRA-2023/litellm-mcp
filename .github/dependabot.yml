@@ -1,0 +1,30 @@
+# Dependabot configuration.
+#
+# - uv: security + version-update PRs for Python deps in uv.lock / pyproject.toml.
+# - github-actions: keeps the action pins in .github/workflows current.
+#
+# These are first-party TETRA repos, so PRs are mergeable as-is after CI.
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
