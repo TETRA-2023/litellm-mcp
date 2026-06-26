@@ -28,3 +28,9 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
+    ignore:
+      # actions/checkout@v7 breaks the release job's authenticated checkout:
+      # the custom GH_TOKEN is not injected -> "could not read Username".
+      # Release job pinned to v6; hold the major bump until the v7 token flow works.
+      - dependency-name: "actions/checkout"
+        update-types: ["version-update:semver-major"]
