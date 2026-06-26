@@ -10,7 +10,7 @@ requires-python = ">=3.12"
 authors = [{ name = "TETRA" }]
 license = { text = "MIT" }
 dependencies = [
-    "mcp[cli]>=1.27.2",
+    "mcp[cli]>=1.28.1",
     "httpx>=0.28.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
