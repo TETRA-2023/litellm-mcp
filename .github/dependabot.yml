@@ -16,6 +16,12 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    commit-message:
+      # Runtime deps -> fix(deps) so a security/runtime bump cuts a patch release
+      # (-> release-image.yml builds a fresh :stable + :X.Y.Z with the fix).
+      # Dev/tooling deps -> chore(deps-dev): no release.
+      prefix: "fix"
+      prefix-development: "chore"
 
   - package-ecosystem: "github-actions"
     directory: "/"
