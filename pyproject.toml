@@ -69,5 +69,5 @@ changelog_file = "CHANGELOG.md"
 
 [dependency-groups]
 dev = [
-    "python-semantic-release>=10.5.3",
+    "python-semantic-release>=10.6.1",
 ]
