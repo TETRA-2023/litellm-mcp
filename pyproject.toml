@@ -23,7 +23,7 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=4.1.0",
     "ruff>=0.15.22",
-    "pre-commit>=3.0.0",
+    "pre-commit>=4.6.1",
 ]
 
 [tool.setuptools]
