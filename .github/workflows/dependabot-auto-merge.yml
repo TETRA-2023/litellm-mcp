@@ -4,8 +4,10 @@
 # all required status checks (lint/test/secrets/docker) to pass before merging.
 # A failing check => the PR stays queued and never merges.
 #
-# Major version bumps are intentionally NOT auto-merged — they wait for a human
-# (e.g. eslint 9->10, typescript 5->6), matching our "review majors" policy.
+# Only minor/patch bumps are auto-merged (allowlist). Majors — and any update
+# fetch-metadata cannot classify (update-type is null for requirement-range
+# changes, e.g. `mcp[cli]>=1.28.1` -> `>=2.2.0`) — wait for a human, matching
+# our "review majors" policy. A `!= semver-major` denylist let those through.
 name: Dependabot auto-merge
 
 on: pull_request_target
@@ -25,8 +27,8 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Enable auto-merge (non-major only)
-        if: steps.meta.outputs.update-type != 'version-update:semver-major'
+      - name: Enable auto-merge (minor/patch only)
+        if: contains(fromJSON('["version-update:semver-minor","version-update:semver-patch"]'), steps.meta.outputs.update-type)
         run: gh pr merge --auto --squash "${{ github.event.pull_request.html_url }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

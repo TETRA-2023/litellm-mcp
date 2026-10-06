@@ -22,6 +22,11 @@ updates:
       # Dev/tooling deps -> chore(deps-dev): no release.
       prefix: "fix"
       prefix-development: "chore"
+    ignore:
+      # mcp 2.x renames FastMCP -> MCPServer; the migration is tracked
+      # separately, so don't re-propose the major on every release.
+      - dependency-name: "mcp"
+        versions: [">=2"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
