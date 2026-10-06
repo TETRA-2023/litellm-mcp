@@ -4,6 +4,9 @@
 # all required status checks (lint/test/secrets/docker) to pass before merging.
 # A failing check => the PR stays queued and never merges.
 #
+# Uses the GH_TOKEN PAT, not GITHUB_TOKEN, so the merge triggers main's CI and
+# release; Dependabot merges are therefore attributed to that PAT's account.
+#
 # Only minor/patch bumps are auto-merged (allowlist). Majors — and any update
 # fetch-metadata cannot classify (update-type is null for requirement-range
 # changes, e.g. `mcp[cli]>=1.28.1` -> `>=2.2.0`) — wait for a human, matching
@@ -31,4 +34,10 @@ jobs:
         if: contains(fromJSON('["version-update:semver-minor","version-update:semver-patch"]'), steps.meta.outputs.update-type)
         run: gh pr merge --auto --squash "${{ github.event.pull_request.html_url }}"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # NOT GITHUB_TOKEN: a merge made with GITHUB_TOKEN fires no `push`
+          # workflow, so main got no CI, no semantic-release and no image — the
+          # auto-merged runtime fixes only shipped when a human merged something
+          # else. GH_TOKEN (the PAT semantic-release already uses) merges as a
+          # real account, so the push runs the full pipeline. No fallback on
+          # purpose: if the secret is unreadable here, fail loudly.
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
