@@ -73,6 +73,8 @@ jobs:
       contents: read
       packages: write
 
+    env:
+      SMOKE_NAME: smoke-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
     steps:
       - uses: actions/checkout@v7
 
@@ -83,14 +85,38 @@ jobs:
         id: repo
         run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
-      - name: Build image (PR validation only)
-        if: github.event_name == 'pull_request'
+      - name: Build image for the smoke test
         uses: docker/build-push-action@v7
         with:
           context: .
           push: false
+          load: true
+          tags: mcp-smoke:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Container smoke test: start the REAL image through its entrypoint and
+      # transport, then initialize + tools/list. Unit tests stayed green while
+      # langfuse-mcp v1.1.6/v1.1.7 crash-looped at import in prod (2026-10-07,
+      # TETRA-2023/langfuse-mcp#81); this step is what catches that. Dummy
+      # credentials only: tools/list must not need a live LiteLLM proxy. The server runs with --network none, so CI never
+      # calls a real upstream (EPO OPS, PPUBS, ...). No host port is published,
+      # and the script is piped on stdin (no bind mount: self-hosted runners
+      # drive the HOST daemon, which cannot see the runner's workspace).
+      - name: Smoke test image (initialize + tools/list)
+        run: |
+          python3 scripts/ci/mcp-smoke.py stdio -- \
+            docker run -i --rm --network none --name "$SMOKE_NAME" \
+            -e LITELLM_BASE_URL=http://127.0.0.1:9 \
+            -e LITELLM_API_KEY=sk-ci \
+            mcp-smoke:ci
+        timeout-minutes: 3
+
+      - name: Smoke test logs and cleanup
+        if: always()
+        run: |
+          docker logs --tail 50 "$SMOKE_NAME" 2>&1 || true
+          docker rm -f "$SMOKE_NAME" >/dev/null 2>&1 || true
 
       - name: Log in to GHCR
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
