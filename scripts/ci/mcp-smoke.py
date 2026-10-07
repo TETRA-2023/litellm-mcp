@@ -13,10 +13,11 @@ Stdlib only, Python >= 3.8 (the self-hosted runner image ships 3.8).
   http:   mcp-smoke.py http URL [--bearer TOKEN] [--wait SECONDS]
 
 In http mode run this script where URL is reachable, e.g. in a sidecar that
-shares the server's network namespace (no host port is published, so two
-jobs on the same runner cannot collide):
-  docker run --rm --network container:SUT -v "$PWD/scripts/ci:/s:ro" \
-    python:3.12-alpine python /s/mcp-smoke.py http http://127.0.0.1:8000/mcp
+shares the server's network namespace, with the script piped on stdin (no
+host port to collide on, no bind mount for a self-hosted runner's host
+daemon to miss):
+  docker run --rm -i --network container:SUT python:3.12-alpine \
+    python - http http://127.0.0.1:8000/mcp < scripts/ci/mcp-smoke.py
 """
 
 import json

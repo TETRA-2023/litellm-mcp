@@ -99,7 +99,9 @@ jobs:
       # transport, then initialize + tools/list. Unit tests stayed green while
       # langfuse-mcp v1.1.6/v1.1.7 crash-looped at import in prod (2026-10-07,
       # TETRA-2023/langfuse-mcp#81); this step is what catches that. Dummy
-      # credentials only: tools/list must not need a live LiteLLM proxy. No host port is published.
+      # credentials only: tools/list must not need a live LiteLLM proxy. No host port is published,
+      # and the script is piped on stdin (no bind mount: self-hosted runners
+      # drive the HOST daemon, which cannot see the runner's workspace).
       - name: Smoke test image (initialize + tools/list)
         run: |
           python3 scripts/ci/mcp-smoke.py stdio -- \
