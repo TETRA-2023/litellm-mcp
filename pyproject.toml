@@ -12,7 +12,7 @@ license = { text = "MIT" }
 dependencies = [
     "mcp[cli]>=1.30.0,<2",
     "httpx>=0.28.0",
-    "pydantic>=2.14.0",
+    "pydantic>=2.14.1",
     "pydantic-settings>=2.16.0",
     "python-dotenv>=1.2.4",
 ]
