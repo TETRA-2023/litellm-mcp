@@ -136,35 +136,17 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # Tag only (Taiga #2870): tags vX.Y.Z and creates the GitHub Release with the
+  # tetra-release App, nothing is committed to main. The tag (pushed by the App,
+  # not GITHUB_TOKEN) triggers release-image.yml. release.yml is a byte-identical
+  # copy of TETRA-2023/ci-workflows' release.yml: that repo is private, so a
+  # public repo cannot call it. Change it there first, then copy it here.
   release:
     needs: [secrets, test, lint]
-    runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    concurrency: release
-    permissions:
-      id-token: write
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GH_TOKEN }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          version: "latest"
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --all-extras --dev
-
-      - name: Python Semantic Release
-        run: |
-          uv run semantic-release version --skip-build
-          uv run semantic-release publish
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+    uses: ./.github/workflows/release.yml
+    with:
+      client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+      runs-on: ubuntu-latest
+    secrets:
+      app-key: ${{ secrets.RELEASE_APP_KEY }}

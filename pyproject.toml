@@ -4,7 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "litellm-mcp"
-version = "1.6.15"
+# Real version = git tag vX.Y.Z (see GitHub Releases); never bumped here. Taiga #2870.
+version = "0.0.0"
 description = "MCP server for LiteLLM proxy administration and execution"
 requires-python = ">=3.12"
 authors = [{ name = "TETRA" }]
@@ -49,11 +50,10 @@ markers = [
 addopts = "-v"
 asyncio_mode = "auto"
 
+# Tag only: .github/workflows/release.yml tags the commit and creates the
+# GitHub Release; nothing is committed to main.
 [tool.semantic_release]
-version_toml = ["pyproject.toml:project.version"]
 branch = "main"
-commit_message = "chore(release): v{version}"
-build_command = ""
 
 [tool.semantic_release.commit_parser_options]
 allowed_tags = ["build", "chore", "ci", "docs", "feat", "fix", "perf", "style", "refactor", "test"]
@@ -63,9 +63,6 @@ patch_tags = ["fix", "perf"]
 [tool.semantic_release.remote]
 type = "github"
 token = { env = "GH_TOKEN" }
-
-[tool.semantic_release.changelog.default_templates]
-changelog_file = "CHANGELOG.md"
 
 [dependency-groups]
 dev = [
