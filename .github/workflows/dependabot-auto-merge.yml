@@ -4,8 +4,8 @@
 # all required status checks (lint/test/secrets/docker) to pass before merging.
 # A failing check => the PR stays queued and never merges.
 #
-# Uses the GH_TOKEN PAT, not GITHUB_TOKEN, so the merge triggers main's CI and
-# release; Dependabot merges are therefore attributed to that PAT's account.
+# Uses a tetra-release App token, not GITHUB_TOKEN, so the merge triggers
+# main's CI; Dependabot merges are attributed to tetra-release[bot] (Taiga #2870).
 #
 # Only minor/patch bumps are auto-merged (allowlist). Majors — and any update
 # fetch-metadata cannot classify (update-type is null for requirement-range
@@ -30,14 +30,26 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Workflows: write too, because Dependabot's github-actions updates edit
+      # .github/workflows/ and an App token cannot merge those without it.
+      - name: App token
+        id: app-token
+        if: contains(fromJSON('["version-update:semver-minor","version-update:semver-patch"]'), steps.meta.outputs.update-type)
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
       - name: Enable auto-merge (minor/patch only)
         if: contains(fromJSON('["version-update:semver-minor","version-update:semver-patch"]'), steps.meta.outputs.update-type)
         run: gh pr merge --auto --squash "${{ github.event.pull_request.html_url }}"
         env:
           # NOT GITHUB_TOKEN: a merge made with GITHUB_TOKEN fires no `push`
-          # workflow, so main got no CI, no semantic-release and no image — the
-          # auto-merged runtime fixes only shipped when a human merged something
-          # else. GH_TOKEN (the PAT semantic-release already uses) merges as a
-          # real account, so the push runs the full pipeline. No fallback on
-          # purpose: if the secret is unreadable here, fail loudly.
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          # workflow, so main got no CI and no image — the auto-merged runtime
+          # fixes only shipped when a human merged something else. The App
+          # token merges as tetra-release[bot], so the push runs the full
+          # pipeline. No fallback on purpose: if the key is unreadable, fail.
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}

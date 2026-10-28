@@ -1,0 +1,127 @@
+# Reusable "tag only" semantic release (Taiga #2870, US-6 #2927).
+#
+# Tags the validated commit vX.Y.Z and creates the GitHub Release with the
+# tetra-release App token. Nothing is committed to the release branch: the
+# version lives in the git tag only, so the branch stays fully protected
+# (org ruleset org-default-branch-pr, no bypass) and only the App may create
+# v* tags (org ruleset org-release-tags).
+#
+# The caller repo keeps its own [tool.semantic_release] config (tag_format,
+# commit parser, branches) in pyproject.toml.
+#
+# Caller, push-triggered CI (pin by SHA, never @main):
+#
+#   release:
+#     needs: [test, lint]
+#     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+#     uses: TETRA-2023/ci-workflows/.github/workflows/release.yml@<sha> # <date or tag>
+#     with:
+#       client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+#     secrets:
+#       app-key: ${{ secrets.RELEASE_APP_KEY }}
+#
+# Caller triggered by workflow_run: also pass the commit CI validated, since
+# github.sha is then the branch tip, which may have moved:
+#
+#     with:
+#       ref: ${{ github.event.workflow_run.head_sha }}
+
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      client-id:
+        description: tetra-release App client ID (org variable RELEASE_APP_CLIENT_ID).
+        type: string
+        required: true
+      ref:
+        description: Commit to release. Defaults to github.sha.
+        type: string
+        default: ""
+      branch:
+        description: Release branch name, as matched by the caller's semantic-release config.
+        type: string
+        default: main
+      runs-on:
+        description: Runner label (private repo -> self-hosted).
+        type: string
+        default: self-hosted
+      psr-version:
+        description: python-semantic-release version, run with uvx.
+        type: string
+        default: "10.5.3"
+      python-version:
+        description: Python used to run semantic-release (the runner's system python3 is too old).
+        type: string
+        default: "3.12"
+    secrets:
+      app-key:
+        description: tetra-release App private key (org secret RELEASE_APP_KEY).
+        required: true
+    outputs:
+      released:
+        description: "'true' when this run created a new tag and Release."
+        value: ${{ jobs.release.outputs.released }}
+      version:
+        description: Version without the leading v. Only meaningful when released is 'true'.
+        value: ${{ jobs.release.outputs.version }}
+      tag:
+        description: Git tag, e.g. v1.4.3. Only meaningful when released is 'true'.
+        value: ${{ jobs.release.outputs.tag }}
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Semantic Release
+    runs-on: ${{ inputs.runs-on }}
+    concurrency:
+      group: release-${{ github.repository }}
+      cancel-in-progress: false
+    outputs:
+      released: ${{ steps.psr.outputs.released }}
+      version: ${{ steps.psr.outputs.version }}
+      tag: ${{ steps.psr.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # A SHA checkout leaves a detached HEAD, which semantic-release cannot
+      # match to a release group ("Detached HEAD state cannot match any
+      # release groups", TETRA-BRAND run of 2026-10-27). Name that exact
+      # commit after the release branch locally; only the tag is pushed.
+      - run: git checkout -B "$BRANCH"
+        env:
+          BRANCH: ${{ inputs.branch }}
+
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+
+      # Scoped to contents:write on the calling repo only: enough to push the
+      # tag and create the Release. A tag pushed with GITHUB_TOKEN would not
+      # trigger the caller's tag/release-driven workflows.
+      - id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ inputs.client-id }}
+          private-key: ${{ secrets.app-key }}
+          permission-contents: write
+
+      # Flags spelled out because --no-commit alone derives the others
+      # (PSR 10.5.3, checked with --noop: stamps pyproject locally, tags
+      # HEAD, pushes the tag only, creates the Release). PSR itself writes
+      # released/version/tag to $GITHUB_OUTPUT.
+      - id: psr
+        name: Semantic Release
+        run: >-
+          uvx --python "$PYTHON_VERSION" --from "python-semantic-release==$PSR_VERSION"
+          semantic-release version
+          --no-commit --tag --push --vcs-release --no-changelog
+        env:
+          PSR_VERSION: ${{ inputs.psr-version }}
+          PYTHON_VERSION: ${{ inputs.python-version }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
