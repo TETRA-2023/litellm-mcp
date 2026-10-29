@@ -5,7 +5,8 @@
 #             (transitional, while `stable-alias` is true) stable.
 #             `v-prefix` also pushes vX.Y.Z (consumers pinned on the old form).
 #   prerelease (version contains '-'): X.Y.Z only, never a floating tag.
-#   branch    <branch> and sha-<7>. Never latest.
+#   branch    <branch> and sha-<7>. Never latest. On GHCR, only the `sha-keep`
+#             newest sha-only versions are kept; older ones are deleted.
 #
 # Tags are computed here in shell from `version`/`branch`, not from the event
 # ref: a dispatched re-publish of an old tag runs on a branch ref.
@@ -113,6 +114,10 @@ on:
         description: Runner label (private repo -> self-hosted).
         type: string
         default: self-hosted
+      sha-keep:
+        description: Branch mode on GHCR - keep this many newest versions tagged only sha-*; 0 keeps all.
+        type: number
+        default: 10
       dry-run:
         description: Build and smoke-test only; no login, no push.
         type: boolean
@@ -290,3 +295,39 @@ jobs:
           push: true
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha
+          # One manifest per push, no attestation children: a pruned sha- version
+          # leaves nothing orphaned behind it.
+          provenance: false
+          sbom: false
+
+      # Retention (Taiga #2927): every main push adds a sha- tag. A version
+      # carrying any other tag (main, latest, stable, X.Y.Z...) is never touched.
+      # GITHUB_TOKEN with packages: write can delete versions of this repo's
+      # package (tested 2026-10-29). Any API error fails the step.
+      - name: Prune old sha- versions (GHCR)
+        if: ${{ !inputs.dry-run && inputs.mode == 'branch' && inputs.registry == 'ghcr.io' && inputs.sha-keep > 0 }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE: ${{ inputs.image }}
+          KEEP: ${{ inputs.sha-keep }}
+        run: |
+          set -euo pipefail
+          path="${IMAGE#ghcr.io/}"
+          owner="${path%%/*}" name="${path#*/}"
+          api="/orgs/$owner/packages/container/${name//\//%2F}/versions"
+          gh api --paginate "$api?per_page=100" \
+            -q '.[] | select((.metadata.container.tags | length) > 0
+                  and all(.metadata.container.tags[]; startswith("sha-")))
+                | [.created_at, (.id | tostring), (.metadata.container.tags | join(","))] | @tsv' \
+            | sort -r > versions.tsv
+          {
+            echo "| sha-only versions | kept | deleted |"
+            echo "|---|---|---|"
+            echo "| $(wc -l < versions.tsv) | $(head -n "$KEEP" versions.tsv | wc -l) | $(tail -n +"$((KEEP + 1))" versions.tsv | wc -l) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          tail -n +"$((KEEP + 1))" versions.tsv | while IFS=$'\t' read -r created id tags; do
+            gh api -X DELETE "$api/$id" >/dev/null
+            echo "deleted $tags ($created)"
+          done
+          rm -f versions.tsv
