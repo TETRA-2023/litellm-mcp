@@ -71,7 +71,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
 
     env:
       SMOKE_NAME: smoke-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
@@ -118,23 +117,31 @@ jobs:
           docker logs --tail 50 "$SMOKE_NAME" 2>&1 || true
           docker rm -f "$SMOKE_NAME" >/dev/null 2>&1 || true
 
-      - name: Log in to GHCR
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push image (:latest)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.repo.outputs.image }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+  # image.yml is a byte-identical copy of TETRA-2023/ci-workflows' image.yml
+  # (private repo, so a public repo cannot call it; Taiga #2927). Pushes main
+  # and sha-<7>, never latest, and only if the smoke test passes.
+  publish:
+    needs: [secrets, test, lint, docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/image.yml
+    with:
+      image: ghcr.io/tetra-2023/litellm-mcp
+      registry: ghcr.io
+      registry-username: ${{ github.actor }}
+      mode: branch
+      ref: ${{ github.sha }}
+      branch: main
+      runs-on: ubuntu-latest
+      # Same container smoke test as the docker job.
+      smoke-command: |
+        python3 "$SMOKE_TOOLS/scripts/ci/mcp-smoke.py" stdio -- \
+          docker run -i --rm --network none --name "$SMOKE_NAME" \
+          -e LITELLM_BASE_URL=http://127.0.0.1:9 \
+          -e LITELLM_API_KEY=sk-ci \
+          "$SMOKE_IMAGE"
 
   # Tag only (Taiga #2870): tags vX.Y.Z and creates the GitHub Release with the
   # tetra-release App, nothing is committed to main. The tag (pushed by the App,

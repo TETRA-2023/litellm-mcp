@@ -1,79 +1,83 @@
 name: Release Image
 
+run-name: Release Image ${{ inputs.tag || github.ref_name }}
+
 on:
   push:
     tags: ["v*.*.*"]
+  # Manual re-publish of an EXISTING tag: the tag-push trigger fires once, at
+  # tag creation. The dispatched run uses THIS file (from the ref it is
+  # dispatched on, normally main) but builds the source tree of `inputs.tag`.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing vX.Y.Z tag to (re)publish"
+        required: true
+        type: string
+      floating:
+        description: "Also move latest, stable, X.Y and X to this tag (uncheck when re-publishing an OLD tag)"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
 
 jobs:
-  publish:
+  resolve:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.src.outputs.tag }}
+      version: ${{ steps.src.outputs.version }}
+      floating: ${{ steps.src.outputs.floating }}
+    steps:
+      - id: src
+        env:
+          # `inputs` is null on a tag push, so this falls through to the pushed tag.
+          TAG: ${{ inputs.tag || github.ref_name }}
+          # Guard: dispatching an old tag with floating=true would silently move
+          # latest/stable BACKWARDS for every host pulling them. A tag push has
+          # no inputs and always moves them; a dispatch follows the box. Not
+          # `inputs.floating || 'true'`: an unchecked box is false, and
+          # `false || 'true'` is 'true', so that form moved :stable on every
+          # dispatch (v7.0.0's re-publish, 2026-10-21, moved it off v8.0.3).
+          FLOATING: ${{ github.event_name != 'workflow_dispatch' || inputs.floating }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'$TAG' is not a vX.Y.Z tag"
+            exit 1
+          fi
+          {
+            echo "tag=$TAG"
+            echo "version=${TAG#v}"
+            echo "floating=$FLOATING"
+          } >> "$GITHUB_OUTPUT"
+
+  # image.yml: byte-identical copy of ci-workflows' (Taiga #2927). Pushes X.Y.Z
+  # (+ X.Y, X, latest and stable when floating) only if the smoke test passes.
+  # Prod pulls :stable through Watchtower.
+  image:
+    needs: resolve
     permissions:
       contents: read
       packages: write
-    env:
-      SMOKE_NAME: smoke-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Normalize image name
-        id: repo
-        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-
-      - name: Extract version from tag
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # Gate :stable on the smoke test: a failing image is never pushed, so
-      # Watchtower keeps running the previous :stable.
-      - name: Build image for the smoke test
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: false
-          load: true
-          tags: mcp-smoke:ci
-          cache-from: type=gha
-
-      # Container smoke test: start the REAL image through its entrypoint and
-      # transport, then initialize + tools/list. Unit tests stayed green while
-      # langfuse-mcp v1.1.6/v1.1.7 crash-looped at import in prod (2026-10-07,
-      # TETRA-2023/langfuse-mcp#81); this step is what catches that. Dummy
-      # credentials only: tools/list must not need a live LiteLLM proxy. The server runs with --network none, so CI never
-      # calls a real upstream (EPO OPS, PPUBS, ...). No host port is published,
-      # and the script is piped on stdin (no bind mount: self-hosted runners
-      # drive the HOST daemon, which cannot see the runner's workspace).
-      - name: Smoke test image (initialize + tools/list)
-        run: |
-          python3 scripts/ci/mcp-smoke.py stdio -- \
-            docker run -i --rm --network none --name "$SMOKE_NAME" \
-            -e LITELLM_BASE_URL=http://127.0.0.1:9 \
-            -e LITELLM_API_KEY=sk-ci \
-            mcp-smoke:ci
-        timeout-minutes: 3
-
-      - name: Smoke test logs and cleanup
-        if: always()
-        run: |
-          docker logs --tail 50 "$SMOKE_NAME" 2>&1 || true
-          docker rm -f "$SMOKE_NAME" >/dev/null 2>&1 || true
-
-      - name: Build and push image (:stable + :version)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ steps.repo.outputs.image }}:stable
-            ${{ steps.repo.outputs.image }}:${{ steps.version.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+    uses: ./.github/workflows/image.yml
+    with:
+      image: ghcr.io/tetra-2023/litellm-mcp
+      registry: ghcr.io
+      registry-username: ${{ github.actor }}
+      mode: release
+      ref: ${{ needs.resolve.outputs.tag }}
+      version: ${{ needs.resolve.outputs.version }}
+      floating: ${{ needs.resolve.outputs.floating == 'true' }}
+      runs-on: ubuntu-latest
+      # Same container smoke test as ci.yml. SMOKE_TOOLS is this workflow's own
+      # ref: an OLD tag may predate the script.
+      smoke-command: |
+        python3 "$SMOKE_TOOLS/scripts/ci/mcp-smoke.py" stdio -- \
+          docker run -i --rm --network none --name "$SMOKE_NAME" \
+          -e LITELLM_BASE_URL=http://127.0.0.1:9 \
+          -e LITELLM_API_KEY=sk-ci \
+          "$SMOKE_IMAGE"

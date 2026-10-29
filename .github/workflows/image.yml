@@ -1,0 +1,292 @@
+# Reusable image build: build, smoke test, push (Taiga US-6 #2927).
+#
+# One tag convention for every image (rva, 2026-10-27):
+#   release   X.Y.Z, and when `floating` is true also X.Y, X, latest and
+#             (transitional, while `stable-alias` is true) stable.
+#             `v-prefix` also pushes vX.Y.Z (consumers pinned on the old form).
+#   prerelease (version contains '-'): X.Y.Z only, never a floating tag.
+#   branch    <branch> and sha-<7>. Never latest.
+#
+# Tags are computed here in shell from `version`/`branch`, not from the event
+# ref: a dispatched re-publish of an old tag runs on a branch ref.
+#
+# The image is built once into the runner's daemon, smoke-tested, and only then
+# pushed (rebuilt from the build cache). A failing smoke test pushes nothing.
+#
+# Caller, tag-triggered release (pin by SHA, never @main):
+#
+#   image:
+#     uses: TETRA-2023/ci-workflows/.github/workflows/image.yml@<sha> # <date or tag>
+#     with:
+#       image: rg.fr-par.scw.cloud/tetra/<name>
+#       registry: rg.fr-par.scw.cloud
+#       mode: release
+#       ref: ${{ github.ref_name }}
+#       version: <X.Y.Z, no v>
+#       smoke-command: |
+#         docker run -d --network none --name "$SMOKE_NAME" "$SMOKE_IMAGE"
+#         ...
+#     secrets:
+#       registry-password: ${{ secrets.SCW_SECRET_KEY }}
+#
+# Caller, main-branch build: mode: branch, branch: main, ref: ${{ github.sha }}.
+#
+# Permissions: this workflow sets none, so it runs with the caller job's token.
+# A GHCR push without `registry-password` needs the caller job to grant
+# `contents: read` and `packages: write` (a called workflow can only lower them).
+#
+# `prepare-command` runs in bash after the checkout and before both builds, with
+# VERSION, BRANCH and MODE in env. It edits the build context without committing,
+# e.g. writing the tag's version into pyproject.toml (langfuse-mcp, tag only).
+#
+# The smoke command runs in bash (-euo pipefail) with:
+#   SMOKE_IMAGE  the locally built image (not pushed)
+#   SMOKE_NAME   a unique container name; removed after the step whatever happens
+#   SMOKE_TOOLS  checkout of `smoke-tools-path` at the CALLER's github.sha, so a
+#                re-publish of an old tag still uses the current smoke script
+
+name: Image
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: Full image name without tag, e.g. rg.fr-par.scw.cloud/tetra/uspto-mcp.
+        type: string
+        required: true
+      registry:
+        description: Registry host for login, e.g. rg.fr-par.scw.cloud or ghcr.io (no namespace suffix).
+        type: string
+        required: true
+      registry-username:
+        description: Registry user. Scaleway takes any value; GHCR takes github.actor.
+        type: string
+        default: nologin
+      mode:
+        description: "'release' (version tags) or 'branch' (branch and sha- tags)."
+        type: string
+        required: true
+      ref:
+        description: Commit, branch or tag to build.
+        type: string
+        required: true
+      version:
+        description: Release version without the leading v (mode release).
+        type: string
+        default: ""
+      branch:
+        description: Branch name (mode branch).
+        type: string
+        default: ""
+      floating:
+        description: Move X.Y, X, latest (and stable). Set false to re-publish an OLD release.
+        type: boolean
+        default: true
+      stable-alias:
+        description: Also move stable with latest (transitional, until no consumer pulls stable).
+        type: boolean
+        default: true
+      v-prefix:
+        description: Also push vX.Y.Z (only for consumers still pinned on the v form).
+        type: boolean
+        default: false
+      prepare-command:
+        description: Bash run in the checkout before the builds (VERSION, BRANCH, MODE in env). Empty skips it.
+        type: string
+        default: ""
+      smoke-command:
+        description: Bash run against SMOKE_IMAGE. Required; an image without a smoke test is never pushed.
+        type: string
+        required: true
+      smoke-tools-path:
+        description: Caller path checked out at github.sha into SMOKE_TOOLS.
+        type: string
+        default: scripts/ci
+      context:
+        type: string
+        default: .
+      dockerfile:
+        description: Dockerfile path; empty means <context>/Dockerfile.
+        type: string
+        default: ""
+      runs-on:
+        description: Runner label (private repo -> self-hosted).
+        type: string
+        default: self-hosted
+      dry-run:
+        description: Build and smoke-test only; no login, no push.
+        type: boolean
+        default: false
+    secrets:
+      registry-password:
+        description: Registry password or token. Empty falls back to github.token (GHCR; caller grants packages:write).
+        required: false
+    outputs:
+      tags:
+        description: Image tags (newline-separated, full names) pushed, or that would be pushed on a dry run.
+        value: ${{ jobs.image.outputs.tags }}
+      digest:
+        description: Pushed image digest. Empty on a dry run.
+        value: ${{ jobs.image.outputs.digest }}
+
+jobs:
+  image:
+    name: Build, smoke test, push
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 45
+    # One push per release or branch at a time: an older run must not push last.
+    concurrency:
+      group: image-${{ github.repository }}-${{ inputs.image }}-${{ inputs.mode }}-${{ inputs.version || inputs.branch }}
+      cancel-in-progress: false
+    outputs:
+      tags: ${{ steps.tags.outputs.tags }}
+      digest: ${{ steps.push.outputs.digest }}
+    env:
+      SMOKE_TOOLS: ${{ github.workspace }}/.smoke-tools
+    steps:
+      # Unique per job: github.job is the same ("image") for every call of this
+      # workflow, and self-hosted runners share the host daemon, so two calls in
+      # one run removed each other's smoke image (test-image.yml, 2026-10-29).
+      - name: Name the smoke container and image
+        run: |
+          id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(cut -c1-8 /proc/sys/kernel/random/uuid)"
+          echo "SMOKE_NAME=smoke-$id" >> "$GITHUB_ENV"
+          echo "SMOKE_IMAGE=image-smoke:$id" >> "$GITHUB_ENV"
+
+      - name: Compute tags
+        id: tags
+        env:
+          IMAGE: ${{ inputs.image }}
+          MODE: ${{ inputs.mode }}
+          VERSION: ${{ inputs.version }}
+          BRANCH: ${{ inputs.branch }}
+          REF: ${{ inputs.ref }}
+          FLOATING: ${{ inputs.floating }}
+          STABLE_ALIAS: ${{ inputs.stable-alias }}
+          V_PREFIX: ${{ inputs.v-prefix }}
+        run: |
+          set -euo pipefail
+          tags=()
+          case "$MODE" in
+            release)
+              if [[ ! "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+                echo "::error::version '$VERSION' is not X.Y.Z[-pre] (no leading v)"
+                exit 1
+              fi
+              major="${BASH_REMATCH[1]}" minor="${BASH_REMATCH[2]}" pre="${BASH_REMATCH[4]}"
+              tags+=("$VERSION")
+              [ "$V_PREFIX" = "true" ] && tags+=("v$VERSION")
+              # A prerelease never moves a floating tag, whatever `floating` says.
+              if [ -z "$pre" ] && [ "$FLOATING" = "true" ]; then
+                tags+=("$major.$minor" "$major" latest)
+                [ "$STABLE_ALIAS" = "true" ] && tags+=(stable)
+              fi
+              ;;
+            branch)
+              if [[ ! "$BRANCH" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+                echo "::error::branch '$BRANCH' is empty or not a valid image tag"
+                exit 1
+              fi
+              if [ "$BRANCH" = "latest" ] || [ "$BRANCH" = "stable" ]; then
+                echo "::error::branch '$BRANCH' would overwrite a release tag"
+                exit 1
+              fi
+              # The sha- tag must name the commit actually built.
+              if [[ ! "$REF" =~ ^[0-9a-f]{40}$ ]]; then
+                echo "::error::branch mode needs ref to be a full commit SHA (github.sha), got '$REF'"
+                exit 1
+              fi
+              tags+=("$BRANCH" "sha-${REF:0:7}")
+              ;;
+            *)
+              echo "::error::mode must be 'release' or 'branch', got '$MODE'"
+              exit 1
+              ;;
+          esac
+          {
+            echo "tags<<EOF"
+            for t in "${tags[@]}"; do echo "$IMAGE:$t"; done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          for t in "${tags[@]}"; do echo "- \`$IMAGE:$t\`"; done >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - name: Prepare the build context
+        if: ${{ inputs.prepare-command != '' }}
+        shell: bash
+        env:
+          PREPARE_COMMAND: ${{ inputs.prepare-command }}
+          VERSION: ${{ inputs.version }}
+          BRANCH: ${{ inputs.branch }}
+          MODE: ${{ inputs.mode }}
+        run: bash -euo pipefail -c "$PREPARE_COMMAND"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build image for the smoke test
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          push: false
+          load: true
+          tags: ${{ env.SMOKE_IMAGE }}
+          cache-from: type=gha
+          cache-to: ${{ !inputs.dry-run && 'type=gha,mode=max' || '' }}
+
+      # After the build, so the tools never land in the build context (and the
+      # image) of a caller without a .dockerignore entry for them.
+      - name: Check out the smoke-test tools (caller's github.sha)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: .smoke-tools
+          sparse-checkout: ${{ inputs.smoke-tools-path }}
+          persist-credentials: false
+
+      - name: Smoke test
+        shell: bash
+        env:
+          SMOKE_COMMAND: ${{ inputs.smoke-command }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SMOKE_COMMAND//[[:space:]]/}" ]; then
+            echo "::error::smoke-command is empty"
+            exit 1
+          fi
+          bash -euo pipefail -c "$SMOKE_COMMAND"
+        timeout-minutes: 5
+
+      - name: Smoke test logs and cleanup
+        if: always()
+        run: |
+          docker logs --tail 50 "$SMOKE_NAME" 2>&1 || true
+          docker rm -f "$SMOKE_NAME" >/dev/null 2>&1 || true
+          docker image rm "$SMOKE_IMAGE" >/dev/null 2>&1 || true
+          rm -rf "$SMOKE_TOOLS"
+
+      - name: Log in to the registry
+        if: ${{ !inputs.dry-run }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          # Registry HOST only: login-action stores an auth entry per host, and
+          # a /namespace suffix would not match on push.
+          registry: ${{ inputs.registry }}
+          username: ${{ inputs.registry-username }}
+          password: ${{ secrets.registry-password || github.token }}
+
+      - name: Build and push
+        id: push
+        if: ${{ !inputs.dry-run }}
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha
