@@ -1,0 +1,120 @@
+# Keep auto-merged Dependabot PRs moving under strict branch protection.
+#
+# Canonical copy: TETRA-2023/ci-workflows copies/dependabot-rebase.yml.
+# Every repo with Dependabot carries this file byte-identical; change it there
+# first (Taiga US-7 #2938).
+#
+# The default branch requires PRs to be up to date (strict), GitHub auto-merge
+# never updates a branch, and Dependabot only rebases on its own when a PR
+# CONFLICTS. So any push that doesn't touch a Dependabot PR's files (a ci/docs
+# change) leaves every open Dependabot PR BEHIND forever, green checks and all
+# (pytaiga-mcp #177/#178, 2026-10-22).
+#
+# Updates the OLDEST stuck PR with auto-merge on through the update-branch API,
+# with the tetra-release App token (Taiga #2870). `@dependabot rebase` needed a
+# personal PAT: Dependabot ignores commands from bot accounts, and the App is
+# one. Trade-off: once its branch is updated by someone else, Dependabot stops
+# rebasing that PR; if it later CONFLICTS, close it and Dependabot opens a fresh
+# one. The App's push is not GITHUB_TOKEN, so CI and auto-merge run as usual
+# (langfuse-mcp #98, 2026-10-28).
+#
+# One PR at a time on purpose: its merge pushes to the default branch and
+# re-triggers this workflow for the next one, instead of N parallel CI runs
+# that all go stale after the first merge. Releases are tag-only (Taiga #2870):
+# no version commit lands on the branch, so one merge means one update.
+#
+# Same file on `main` and gitflow (`develop`) repos: the push filter lists the
+# usual default branch names, and the job only runs for a push to the repo's
+# actual default branch.
+#
+# PRs without auto-merge (majors, held by policy) are skipped. The schedule is
+# a backstop in case nothing pushes. A candidate stuck for more than 24h fails
+# the run, so a stall shows up as a red run instead of silence.
+name: Dependabot rebase
+
+on:
+  push:
+    branches: [main, master, develop]
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only print the PR that would be updated"
+        type: boolean
+        default: true
+
+concurrency:
+  group: dependabot-rebase
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  rebase:
+    # GitHub-hosted like dependabot-auto-merge.yml: `gh` is there, and a job
+    # holding a write token has no business on a self-hosted runner.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The push payload carries the default branch; schedule and dispatch
+    # always run.
+    if: github.event_name != 'push' || github.ref_name == github.event.repository.default_branch
+    steps:
+      # Workflows: write because Dependabot's github-actions PRs edit
+      # .github/workflows/, and updating such a branch rewrites those files.
+      - name: App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Update the oldest stuck auto-merge PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: |
+          set -euo pipefail
+          # mergeStateStatus is computed lazily and can read UNKNOWN right after
+          # a push: retry a few times before concluding there is nothing to do.
+          for _ in 1 2 3 4 5; do
+            prs=$(gh pr list --repo "$REPO" --author app/dependabot --state open \
+              --json number,createdAt,mergeStateStatus,autoMergeRequest)
+            unknown=$(jq '[.[] | select(.autoMergeRequest != null)
+                               | select(.mergeStateStatus == "UNKNOWN")] | length' <<<"$prs")
+            [ "$unknown" -eq 0 ] && break
+            sleep 15
+          done
+          pick=$(jq -c '[.[] | select(.autoMergeRequest != null)
+                             | select(.mergeStateStatus == "BEHIND" or .mergeStateStatus == "DIRTY")]
+                        | sort_by(.createdAt) | first // empty' <<<"$prs")
+          if [ -z "$pick" ]; then
+            echo "No stuck Dependabot PR with auto-merge on."
+            exit 0
+          fi
+          n=$(jq -r .number <<<"$pick")
+          state=$(jq -r .mergeStateStatus <<<"$pick")
+          created=$(jq -r .createdAt <<<"$pick")
+          echo "Oldest stuck PR: #$n ($state, opened $created)"
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "dry_run: not updating."
+          elif [ "$state" = "DIRTY" ]; then
+            # update-branch cannot resolve a conflict. Dependabot rebases a
+            # conflicting PR itself unless someone else updated it before.
+            echo "::warning::#$n conflicts with the base branch; if Dependabot does not rebase it, close it so it reopens."
+          else
+            gh api -X PUT "repos/$REPO/pulls/$n/update-branch" --jq .message
+          fi
+
+          # Stall alarm: a PR stuck this long means its CI is red or Dependabot
+          # isn't responding. Fail so someone looks.
+          age_h=$(( ( $(date -u +%s) - $(date -u -d "$created" +%s) ) / 3600 ))
+          if [ "$age_h" -ge 24 ]; then
+            echo "::error::Dependabot PR #$n has been stuck ($state) for ${age_h}h; check its CI."
+            exit 1
+          fi
