@@ -1,16 +1,31 @@
 # Auto-enable auto-merge on Dependabot PRs.
 #
-# Safe-by-design: this only *enables* GitHub auto-merge, which still waits for
-# all required status checks (lint/test/secrets/docker) to pass before merging.
-# A failing check => the PR stays queued and never merges.
+# Canonical copy: TETRA-2023/ci-workflows copies/dependabot-auto-merge.yml.
+# Every repo with Dependabot carries this file byte-identical; change it there
+# first (Taiga US-7 #2938).
 #
-# Uses a tetra-release App token, not GITHUB_TOKEN, so the merge triggers
-# main's CI; Dependabot merges are attributed to tetra-release[bot] (Taiga #2870).
+# Safe only with required checks: this *enables* GitHub auto-merge, which
+# waits for every REQUIRED status check, so a failing check keeps the PR queued.
+# The repo needs (1) "Allow auto-merge" on and (2) required status checks on the
+# target branch (classic protection or a ruleset rule), strict. The org ruleset
+# `org-default-branch-pr` requires a PR but no checks. Without (2) the PR is
+# already mergeable and `gh pr merge --auto` merges it at once, untested (#2638).
 #
-# Only minor/patch bumps are auto-merged (allowlist). Majors — and any update
+# Only minor/patch bumps are auto-merged (allowlist). Majors, and any update
 # fetch-metadata cannot classify (update-type is null for requirement-range
-# changes, e.g. `mcp[cli]>=1.28.1` -> `>=2.2.0`) — wait for a human, matching
-# our "review majors" policy. A `!= semver-major` denylist let those through.
+# changes, e.g. `mcp[cli]>=1.28.1` -> `>=2.2.0`), wait for a human. A
+# `!= semver-major` denylist let those through (litellm #70, keycloak #57).
+#
+# A PR that carries a commit from anyone else (a human fixing the bump) gets
+# auto-merge switched OFF and waits for review: the earlier run already enabled
+# it, and it would merge the extra commit unreviewed. The only other commit
+# allowed is the merge commit dependabot-rebase.yml makes with the App
+# (update-branch). Taken from SAI-AGENT-PLATFORM.
+# So do not press "Update branch" on a Dependabot PR: that merge commit is
+# yours, and auto-merge goes off. Let dependabot-rebase.yml do it; if you did
+# press it, comment `@dependabot recreate` (rebase refuses an edited PR) to get
+# auto-merge back. A commit whose email maps to no GitHub account (author
+# null) counts as foreign too, on purpose.
 name: Dependabot auto-merge
 
 on: pull_request_target
@@ -21,17 +36,42 @@ permissions:
 
 jobs:
   auto-merge:
+    # GitHub-hosted on purpose: `gh` is on the image, and pull_request_target
+    # carries write-scoped secrets, which have no business on a self-hosted
+    # runner that bind-mounts the Docker socket.
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    timeout-minutes: 10
+    # Runs on every push to a Dependabot PR, whoever pushed, so the guard
+    # sees foreign commits; only Dependabot's own pushes enable auto-merge.
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
+      - name: Require Dependabot-only commits
+        id: commits
+        run: |
+          others=$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/commits" --jq '.[]
+            | select(.author.login != "dependabot[bot]")
+            | select(.author.login != "tetra-release[bot]" or (.parents | length) != 2)
+            | .sha')
+          if [ -n "$others" ]; then
+            echo "::notice::Commits not from Dependabot, auto-merge off: $others"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            gh pr merge --disable-auto "$PR_URL" || true
+          fi
+        env:
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Fetch Dependabot metadata
         id: meta
-        uses: dependabot/fetch-metadata@v3
+        if: steps.commits.outputs.skip != 'true' && github.actor == 'dependabot[bot]'
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Workflows: write too, because Dependabot's github-actions updates edit
-      # .github/workflows/ and an App token cannot merge those without it.
+      # tetra-release App token, not a PAT (Taiga #2870). Workflows: write too,
+      # because Dependabot's github-actions updates edit .github/workflows/.
       - name: App token
         id: app-token
         if: contains(fromJSON('["version-update:semver-minor","version-update:semver-patch"]'), steps.meta.outputs.update-type)
@@ -45,11 +85,11 @@ jobs:
 
       - name: Enable auto-merge (minor/patch only)
         if: contains(fromJSON('["version-update:semver-minor","version-update:semver-patch"]'), steps.meta.outputs.update-type)
-        run: gh pr merge --auto --squash "${{ github.event.pull_request.html_url }}"
+        run: gh pr merge --auto --squash "$PR_URL"
         env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
           # NOT GITHUB_TOKEN: a merge made with GITHUB_TOKEN fires no `push`
-          # workflow, so main got no CI and no image — the auto-merged runtime
-          # fixes only shipped when a human merged something else. The App
-          # token merges as tetra-release[bot], so the push runs the full
+          # workflow, so the branch would get no CI, no release and no image.
+          # The App merges as tetra-release[bot], so the push runs the full
           # pipeline. No fallback on purpose: if the key is unreadable, fail.
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
