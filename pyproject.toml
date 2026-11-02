@@ -14,7 +14,7 @@ dependencies = [
     "mcp[cli]>=1.30.0,<2",
     "httpx>=0.28.0",
     "pydantic>=2.14.2",
-    "pydantic-settings>=2.16.1",
+    "pydantic-settings>=2.16.2",
     "python-dotenv>=1.2.4",
 ]
 
