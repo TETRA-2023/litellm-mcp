@@ -29,7 +29,12 @@
 #
 # PRs without auto-merge (majors, held by policy) are skipped. The schedule is
 # a backstop in case nothing pushes. A candidate stuck for more than 24h fails
-# the run, so a stall shows up as a red run instead of silence.
+# the run, so a stall shows up as a red run instead of silence. The 24h count
+# from when auto-merge was enabled, not from when the PR was opened: a major
+# that a human puts on auto-merge days later is not a stall (Taiga #3099).
+#
+# A manual run (workflow_dispatch) defaults to dry_run: true. Pass
+# `-f dry_run=false` to actually update the PR.
 name: Dependabot rebase
 
 on:
@@ -99,7 +104,9 @@ jobs:
           n=$(jq -r .number <<<"$pick")
           state=$(jq -r .mergeStateStatus <<<"$pick")
           created=$(jq -r .createdAt <<<"$pick")
-          echo "Oldest stuck PR: #$n ($state, opened $created)"
+          # Stall clock: auto-merge enablement, or creation if that is later.
+          since=$(jq -r '[.createdAt, (.autoMergeRequest.enabledAt // .createdAt)] | max' <<<"$pick")
+          echo "Oldest stuck PR: #$n ($state, opened $created, auto-merge since $since)"
 
           if [ "$DRY_RUN" = "true" ]; then
             echo "dry_run: not updating."
@@ -113,7 +120,7 @@ jobs:
 
           # Stall alarm: a PR stuck this long means its CI is red or Dependabot
           # isn't responding. Fail so someone looks.
-          age_h=$(( ( $(date -u +%s) - $(date -u -d "$created" +%s) ) / 3600 ))
+          age_h=$(( ( $(date -u +%s) - $(date -u -d "$since" +%s) ) / 3600 ))
           if [ "$age_h" -ge 24 ]; then
             echo "::error::Dependabot PR #$n has been stuck ($state) for ${age_h}h; check its CI."
             exit 1
