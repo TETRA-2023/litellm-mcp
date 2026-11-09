@@ -26,6 +26,14 @@
 # press it, comment `@dependabot recreate` (rebase refuses an edited PR) to get
 # auto-merge back. A commit whose email maps to no GitHub account (author
 # null) counts as foreign too, on purpose.
+#
+# A PR that changes a file copied from ci-workflows (the two Dependabot files,
+# and image.yml / release.yml when they are reusable copies, i.e. declare
+# workflow_call) is held too: merged alone it would make the copy differ from
+# the canonical file and turn the drift check red (2026-11-02 and 2026-11-09,
+# docker/login-action). Bump the canonical file in ci-workflows first, then
+# merge the held PR by hand or `@dependabot recreate` it (Taiga US-24 #3531).
+# A caller of ci-workflows (no workflow_call) is not a copy and is not held.
 name: Dependabot auto-merge
 
 on: pull_request_target
@@ -63,9 +71,39 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Hold bumps of files copied from ci-workflows
+        id: copies
+        if: steps.commits.outputs.skip != 'true'
+        run: |
+          held=""
+          while read -r f; do
+            case "$f" in
+              .github/workflows/dependabot-auto-merge.yml|.github/workflows/dependabot-rebase.yml)
+                held="$held $f" ;;
+              .github/workflows/image.yml|.github/workflows/release.yml)
+                if gh api "repos/$REPO/contents/$f?ref=$BASE_SHA" --jq .content 2>/dev/null \
+                    | base64 -d | grep -qE '^[[:space:]]*workflow_call:'; then
+                  held="$held $f"
+                fi ;;
+            esac
+          done < <(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" --jq '.[].filename')
+          if [ -n "$held" ]; then
+            msg="Changes a file copied from TETRA-2023/ci-workflows:$held. Auto-merge off: bump the canonical file there first, then merge this PR by hand or recreate it."
+            echo "::notice::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            gh pr merge --disable-auto "$PR_URL" || true
+          fi
+        env:
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Fetch Dependabot metadata
         id: meta
-        if: steps.commits.outputs.skip != 'true' && github.actor == 'dependabot[bot]'
+        if: steps.commits.outputs.skip != 'true' && steps.copies.outputs.skip != 'true' && github.actor == 'dependabot[bot]'
         uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
