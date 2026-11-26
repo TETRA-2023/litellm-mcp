@@ -1692,6 +1692,31 @@ async def get_global_spend_report(
     )
 
 
+def _check_spend_logs_bounded(
+    request_id: Optional[str],
+    start_date: Optional[str],
+    end_date: Optional[str],
+    summarize: Optional[bool],
+) -> None:
+    """Refuse `/spend/logs` calls that would return unbounded raw rows.
+
+    Upstream returns raw rows (capped at 10,000) when `summarize` is false
+    with a date range, and also when no date range is given at all. Each row
+    can carry the full request and response, so one such call can be hundreds
+    of megabytes and take the proxy down.
+    """
+    if request_id:
+        return
+    if start_date and end_date and summarize is not False:
+        return
+    raise ValueError(
+        "list_spend_logs refused: without request_id, only the daily summary is "
+        "allowed (start_date and end_date set, summarize unset or True). Raw rows "
+        "over a period can be hundreds of MB and exhaust the proxy's memory; "
+        "aggregate in the proxy database for analysis."
+    )
+
+
 @mcp.tool()
 async def list_spend_logs(
     api_key: Optional[str] = None,
@@ -1702,12 +1727,23 @@ async def list_spend_logs(
     summarize: Optional[bool] = None,
     verbosity: str = "standard",
 ) -> Any:
-    """List per-request spend logs (`GET /spend/logs`).
+    """List spend logs (`GET /spend/logs`): one request by id, or daily totals.
+
+    Two forms only:
+    - `request_id` set: the log row(s) of that request.
+    - `start_date` and `end_date` set (YYYY-MM-DD), `summarize` not False:
+      daily aggregated spend, optionally filtered by `api_key` / `user_id`.
+
+    Any other call would make the proxy return raw rows (up to 10,000, each
+    with the full prompt and response when the proxy stores them) and is
+    refused: such a payload can exhaust the proxy's memory. For analysis over
+    a period, aggregate in the proxy's database instead.
 
     Args:
-        summarize: True to return aggregated rows.
+        summarize: leave unset or True; False is accepted only with `request_id`.
         verbosity: 'minimal' / 'standard' / 'full' — applied to the spend_record items.
     """
+    _check_spend_logs_bounded(request_id, start_date, end_date, summarize)
     payload = await get_client().list_spend_logs(
         api_key, user_id, request_id, start_date, end_date, summarize
     )

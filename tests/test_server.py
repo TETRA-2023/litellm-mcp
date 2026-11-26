@@ -998,19 +998,59 @@ class TestListSpendLogs:
                 "extra": "drop",
             }
         ]
-        result = await src.server.list_spend_logs(api_key="sk-x", verbosity="standard")
+        result = await src.server.list_spend_logs(request_id="r-1", verbosity="standard")
         assert result == [
             {"request_id": "r-1", "model": "gpt-4o", "spend": 0.012, "total_tokens": 100}
         ]
-        mock_client.list_spend_logs.assert_awaited_once_with("sk-x", None, None, None, None, None)
+        mock_client.list_spend_logs.assert_awaited_once_with(None, None, "r-1", None, None, None)
 
     @pytest.mark.asyncio
     async def test_minimal(self, mock_client):
         mock_client.list_spend_logs.return_value = [
             {"request_id": "r-1", "model": "gpt-4o", "spend": 0.012}
         ]
-        result = await src.server.list_spend_logs(verbosity="minimal")
+        result = await src.server.list_spend_logs(request_id="r-1", verbosity="minimal")
         assert result == [{"request_id": "r-1", "model": "gpt-4o"}]
+
+    @pytest.mark.asyncio
+    async def test_request_id_with_summarize_false_allowed(self, mock_client):
+        mock_client.list_spend_logs.return_value = []
+        await src.server.list_spend_logs(request_id="r-1", summarize=False)
+        mock_client.list_spend_logs.assert_awaited_once_with(None, None, "r-1", None, None, False)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("summarize", [None, True])
+    async def test_daily_summary_allowed(self, mock_client, summarize):
+        mock_client.list_spend_logs.return_value = []
+        await src.server.list_spend_logs(
+            api_key="sk-x", start_date="2026-01-01", end_date="2026-01-31", summarize=summarize
+        )
+        mock_client.list_spend_logs.assert_awaited_once_with(
+            "sk-x", None, None, "2026-01-01", "2026-01-31", summarize
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {},
+            {"api_key": "sk-x"},
+            {"user_id": "u-1"},
+            {"summarize": False},
+            {"start_date": "2026-01-01"},
+            {"start_date": "2026-01-01", "end_date": "2026-01-02", "summarize": False},
+            {
+                "api_key": "sk-x",
+                "start_date": "2026-01-01",
+                "end_date": "2026-01-02",
+                "summarize": False,
+            },
+        ],
+    )
+    async def test_unbounded_raw_rows_refused(self, mock_client, kwargs):
+        with pytest.raises(ValueError, match="list_spend_logs refused"):
+            await src.server.list_spend_logs(**kwargs)
+        mock_client.list_spend_logs.assert_not_awaited()
 
 
 class TestListSpendTags:
